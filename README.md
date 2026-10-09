@@ -1,174 +1,205 @@
-# ScamSieve
+# Scam-Sieve
 
-ScamSieve giúp người dùng phát hiện dấu hiệu lừa đảo trong chat, email và URL:
-dán nội dung cần kiểm tra, hệ thống trả về điểm rủi ro 0–100, mức nguy cơ,
-các dấu hiệu đáng nghi và hướng dẫn xử lý an toàn.
+Hệ thống phát hiện lừa đảo trực tuyến cho người dùng Việt Nam — phân tích tin nhắn SMS, URL và số điện thoại, trả về điểm rủi ro 0–100, mức cảnh báo và hướng dẫn xử lý cụ thể.
 
-> ScamSieve là công cụ hỗ trợ tham khảo, **không thay thế** cơ quan chức năng
-> (công an, ngân hàng, tòa án...).
+> Scam-Sieve là công cụ hỗ trợ tham khảo, **không thay thế** cơ quan chức năng (công an, ngân hàng, tòa án...).
+
+---
+
+## Tính năng chính
+
+- **Phân tích đa lớp**: kết hợp rule-based heuristic, mô hình ML (LightGBM + PhoBERT), và AI ngôn ngữ (Gemini / Groq) để đánh giá rủi ro
+- **Phát hiện lừa đảo SMS**: nhận diện giả danh cơ quan, yêu cầu OTP, hối thúc chuyển tiền, trúng thưởng giả, cài app lạ
+- **Phân tích URL**: phát hiện domain giả mạo thương hiệu (typosquatting, homoglyph, combosquatting), IP trực tiếp, redirect lạ, DGA domain
+- **Tình báo số điện thoại**: nhận diện đầu số VoIP cố định ảo (Digitel, GMobile), sim rác, hotline chính thống
+- **Threat Intelligence**: tích hợp URLhaus + OpenPhish cập nhật định kỳ, blacklist nội bộ
+- **OCR từ ảnh chụp màn hình**: trích xuất nội dung từ ảnh để kiểm tra
+- **Extension trình duyệt**: kiểm tra URL ngay khi duyệt web (Chrome/Edge)
+- **Giao diện web**: không cần đăng nhập, nhập nội dung và nhận kết quả ngay lập tức
+
+---
+
+## Kiến trúc hệ thống
+
+```
+Nội dung đầu vào (SMS / URL / SĐT)
+        │
+        ▼
+┌─────────────────────────────────────────┐
+│          Lớp 1: Heuristic Engine        │  ← rule-based, từ khóa, pattern
+│  rules.py + heuristics.py + scorer.py  │
+└────────────────────┬────────────────────┘
+                     │ unified_risk_score
+        ▼
+┌─────────────────────────────────────────┐
+│          Lớp 2: ML Models               │
+│  ml_model.joblib  (SMS classifier)      │  ← TF-IDF + LightGBM
+│  url_lgbm_model.joblib (URL classifier) │  ← 30+ URL features + LightGBM
+│  phobert_head.joblib (NLP head)         │  ← PhoBERT fine-tuned
+└────────────────────┬────────────────────┘
+                     │
+        ▼
+┌─────────────────────────────────────────┐
+│        Lớp 3: AI Cross-Verification     │
+│  Gemini AI / Groq LLM                   │  ← phân tích ngữ nghĩa sâu
+│  + Guardrail đồng bộ kết quả           │  ← không bao giờ mâu thuẫn lớp 1
+└────────────────────┬────────────────────┘
+                     │
+        ▼
+        Kết quả: Điểm rủi ro + Phân loại + Khuyến nghị
+```
+
+---
 
 ## Công nghệ sử dụng
 
-- Backend: Python + FastAPI
-- Giao diện: Jinja2 + HTML/CSS + JavaScript/HTMX tối thiểu (không React/Vue/Flutter)
-- Database: SQLAlchemy + SQLite (dev) / PostgreSQL (production)
-- Auth: Session-cookie (HttpOnly)
+| Thành phần | Công nghệ |
+|---|---|
+| Backend | Python 3.12 + FastAPI |
+| Giao diện | Jinja2 + HTML/CSS (không React/Vue) |
+| Database | SQLAlchemy + SQLite |
+| ML Models | LightGBM, scikit-learn (TF-IDF) |
+| NLP | PhoBERT (VinAI) |
+| AI Cloud | Google Gemini API + Groq API |
+| Threat Intel | URLhaus, OpenPhish |
+| Extension | Chrome Extension (Manifest V3) |
+| Testing | pytest (148 tests) |
 
-## Yêu cầu
+---
 
-- Python 3.11 trở lên đã cài trên Windows ([tải tại đây](https://www.python.org/downloads/))
-- (Tùy chọn) Git để clone mã nguồn
+## Cài đặt và chạy
 
-## Cài đặt và chạy trên Windows
+### Yêu cầu
 
-Mở **PowerShell** hoặc **Command Prompt** tại thư mục dự án, chạy lần lượt:
+- Python 3.11 trở lên
+- Git
 
-1. Tạo môi trường ảo:
+### Các bước
 
-   ```
-   python -m venv venv
-   ```
-
-2. Kích hoạt môi trường ảo:
-
-   - PowerShell:
-     ```
-     venv\Scripts\Activate.ps1
-     ```
-     (Nếu PowerShell báo lỗi không cho chạy script, mở PowerShell với quyền Admin
-     và chạy: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, gõ `Y` để xác nhận,
-     rồi thử lại bước 2.)
-   - Command Prompt (cmd):
-     ```
-     venv\Scripts\activate.bat
-     ```
-
-   Thấy `(venv)` xuất hiện ở đầu dòng lệnh là đã kích hoạt thành công.
-
-3. Cài các thư viện cần thiết:
-
-   ```
-   pip install -r requirements.txt
-   ```
-
-4. Tạo file cấu hình `.env` từ file mẫu:
-
-   ```
-   copy .env.example .env
-   ```
-
-5. Chạy server:
-
-   ```
-   uvicorn app.main:app --reload
-   ```
-
-6. Mở trình duyệt và truy cập: http://127.0.0.1:8000
-
-   Database (`scamsieve.db`) sẽ tự động được tạo trong thư mục dự án ở lần chạy đầu tiên.
-
-## Mở và chạy bằng VS Code
-
-Project đã có sẵn cấu hình trong thư mục `.vscode/` (không cần PyCharm):
-
-1. Mở VS Code → File → Open Folder... → chọn thư mục `scamsieve` (thư mục vừa giải nén).
-2. Lần đầu mở, VS Code sẽ gợi ý cài extension "Python" (Microsoft) — bấm **Install**.
-3. Đã tạo venv theo hướng dẫn ở trên chưa? Nếu rồi, bấm `Ctrl+Shift+P` → gõ **"Python: Select Interpreter"** → chọn interpreter nằm trong `.\venv\Scripts\python.exe`.
-4. Vào tab **Run and Debug** (biểu tượng hình con bọ ở thanh bên trái, hoặc `Ctrl+Shift+D`), chọn 1 trong 3 cấu hình có sẵn ở góc trên:
-   - **ScamSieve: chạy server (uvicorn)** — chạy web server, bấm F5 để bắt đầu, có thể đặt breakpoint để debug.
-   - **ScamSieve: chạy tất cả test** — chạy toàn bộ unit test.
-   - **ScamSieve: đánh giá detector** — chạy script đánh giá trên dataset.
-5. Ngoài ra có thể bấm vào icon "Testing" (hình ống nghiệm) ở thanh bên trái để xem/chạy từng test riêng lẻ mà không cần gõ lệnh.
-
-## Cấu trúc dự án
-
-```
-app/
-├── main.py          # Khởi tạo FastAPI app
-├── config.py         # Đọc biến môi trường từ .env
-├── database.py        # Engine, Session, Base (SQLAlchemy)
-├── models/              # Các bảng dữ liệu (User, Blacklist, Report, ScanHistory)
-├── routers/               # Các route (trang, quét, lịch sử, báo cáo, admin...)
-├── services/                # Logic nghiệp vụ (blacklist_service.py tra cứu SĐT; thêm dần ở các bước sau)
-├── detector/                  # Bộ phát hiện lừa đảo rule-based (sẽ bổ sung ở Bước 4)
-├── templates/                   # Giao diện Jinja2
-└── static/                        # CSS, JS, ảnh
-tests/                              # Unit test
+**1. Clone về máy:**
+```bash
+git clone https://github.com/QuanVuVan/Scam-Sieve.git
+cd Scam-Sieve
 ```
 
-## Trạng thái hiện tại
+**2. Tạo và kích hoạt môi trường ảo:**
+```bash
+python -m venv venv
 
-- [x] Bước 1: Kiến trúc & cấu trúc thư mục
-- [x] Bước 2: Thiết kế schema database (User, Blacklist, Report, ScanHistory)
-- [x] Bước 3: Khung FastAPI chạy được (trang chủ + kết nối DB)
-- [x] Bước 4: Module rule-based — ĐỦ 7/7 nhóm. 6 nhóm THUẦN TÚY (không cần
-  DB, chạy được cả trong `scripts/evaluate_detector.py`, gọi qua
-  `detect_all()`):
-  - "giả danh cơ quan/tổ chức" (4 kịch bản)
-  - "yêu cầu đọc/cung cấp mã OTP" (chỉ báo khi VỪA nhắc OTP VỪA có cụm xin/
-    yêu cầu đọc mã — tránh báo nhầm hàng loạt tin OTP thật của ngân hàng)
-  - "hối thúc chuyển tiền gấp" (giả danh người thân/bạn bè cần tiền gấp,
-    đe dọa phong tỏa tài khoản...)
-  - "URL đáng ngờ" (phát hiện link dùng đuôi tên miền rẻ, dễ đăng ký nặc
-    danh như .top/.cc/.vip/.online/.club/.xyz/.icu/.shop/.life/.biz/.space/
-    .buzz/.run/.asia — không dựa vào .com/.net/.me vì các đuôi này bị dùng
-    lẫn cả trong tin thật)
-  - "trúng thưởng giả" (chỉ báo khi VỪA khẳng định đã trúng thưởng/trúng
-    giải VỪA có yêu cầu đóng phí/hoàn tất thủ tục nhận — tránh báo nhầm
-    tin tiếp thị thật kiểu "CƠ HỘI trúng thưởng..." không đòi phí)
-  - "cài app lạ" — 2 tầng: (1) link/file đuôi `.apk` (tín hiệu độc lập, đã
-    kiểm chứng sạch 2/2 trong dữ liệu mẫu), (2) có động từ cài/tải ứng dụng
-    KÈM cụm từ "không qua CH Play/App Store..." (⚠️ CHƯA kiểm chứng bằng dữ
-    liệu thực tế — dữ liệu mẫu không có ví dụ phù hợp, chỉ dựa trên kiến
-    thức chung về lừa đảo, ghi rõ trong `explanation` trả về)
+# PowerShell
+venv\Scripts\Activate.ps1
 
-  ...VÀ 1 nhóm rule CẦN DATABASE (đặt ở `app/services/blacklist_service.py`
-  thay vì `app/detector/rules.py`, vì cần truy vấn bảng `Blacklist`):
-  - "tra cứu blacklist số điện thoại" — `app/detector/phone_utils.py` trích
-    xuất các chuỗi giống số điện thoại trong nội dung (hỗ trợ nhiều định
-    dạng: số thuần, có khoảng trắng/gạch ngang, dạng quốc tế +84), rồi
-    `blacklist_service.check_blacklist_phone(text, db)` tra trong bảng
-    `Blacklist` (content_type=PHONE). CHƯA được gắn vào `detect_all()` vì
-    hàm đó cố tình giữ thuần túy/không DB — sẽ được gọi CÙNG với
-    `detect_all()` ở router quét nội dung (Bước 5), rồi gộp điểm bằng
-    `scorer.total_score()`.
+# Command Prompt
+venv\Scripts\activate.bat
+```
 
-  52 unit test (tăng từ 41 — thêm `TestFakePrize` và `TestAppInstall` vào
-  `tests/test_detector.py`). Đánh giá trên `data/labeled_messages.csv`
-  (2991 tin thật, có nhãn): precision ~99.7%, recall ~36.8% ở mức "any tín
-  hiệu" (tăng nhẹ từ 36.1% — nhóm trúng thưởng/apk đóng góp ít vì phần lớn
-  case ".apk" đã trùng với nhóm URL); ở mức cảnh báo MEDIUM/HIGH thực sự:
-  recall 2.8%, precision 100% (tăng từ 1.8% — vài tin nay đủ nhiều tín hiệu
-  cộng dồn để vượt ngưỡng). 1 FP tồn đọng từ nhóm `imp_ecommerce` (tin Tiki
-  gửi mã xác minh đăng ký) — cần xem lại sau. Nhóm "cài app lạ" (nhánh
-  không-chính-thống) và độ phủ tổng thể (36.8%/2.8%) còn thấp, cần thêm dữ
-  liệu/rule để cải thiện recall ở các bước sau nếu có thời gian.
-- [x] Bước 5: Giao diện quét nội dung / trang kết quả
-  - `app/routers/scan.py`: `GET /scan` (form nhập), `POST /scan` (chạy
-    `detect_all()` + `check_blacklist_phone()`, gộp điểm bằng
-    `score_and_classify()`, hiển thị kết quả)
-  - `templates/scan.html`, `templates/scan_result.html` — banner màu theo
-    mức rủi ro (xanh/vàng/đỏ), liệt kê từng dấu hiệu khớp kèm giải thích,
-    lời khuyên hành động cụ thể theo từng mức (LOW/MEDIUM/HIGH)
-  - CHƯA đăng nhập, CHƯA lưu vào `ScanHistory` (bảng đó bắt buộc
-    `user_id`, sẽ nối vào khi làm xong đăng nhập ở Bước 6)
-  - 5 test tích hợp mới (`tests/test_scan_router.py`, dùng
-    `fastapi.testclient.TestClient`, cần thêm `httpx` vào
-    `requirements.txt`) — tổng 57 unit/integration test, đã tự chạy thử
-    thủ công qua `curl` để xác nhận giao diện hoạt động đúng
-  - Giao diện đã được thiết kế lại (`app/static/css/style.css`) theo
-    phong cách "cảnh báo an ninh mạng" lấy cảm hứng từ ChongLuaDao: nền
-    xanh đen/đen sẫm, điểm nhấn cyan-trắng, tiêu đề dùng
-    `-webkit-text-stroke` để tạo viền chữ đậm, KHÔNG dùng icon/emoji ở
-    bất kỳ đâu (kể cả tam giác mặc định của thẻ `<details>` cũng đã bị
-    ẩn bằng CSS). Đã render thử bằng Playwright để kiểm tra trực quan.
-- [ ] Bước 6: Tài khoản người dùng, lịch sử quét, báo cáo, trang admin
-- [ ] Bước 7: Checklist kiểm thử, dữ liệu demo, hướng dẫn deploy
+> Nếu PowerShell báo lỗi policy, chạy: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
 
-## Ghi chú kỹ thuật
+**3. Cài thư viện:**
+```bash
+pip install -r requirements.txt
+```
 
-- Bảng trong database được tạo tự động bằng `Base.metadata.create_all()` khi
-  khởi động app (phù hợp giai đoạn phát triển). Alembic (quản lý migration)
-  sẽ được bổ sung khi dự án chuẩn bị triển khai lên PostgreSQL.
-- Không sử dụng API AI trả phí, API bên ngoài, hoặc dữ liệu blacklist từ bên
-  thứ ba nếu chưa được thống nhất trong nhóm.
+**4. Tạo file `.env`:**
+```bash
+copy .env.example .env
+```
+
+Mở file `.env` và điền API key:
+```env
+DATABASE_URL=sqlite:///./scamsieve.db
+SECRET_KEY=your-secret-key-here
+GEMINI_API_KEY=your-gemini-api-key
+GROQ_API_KEY=your-groq-api-key
+DEBUG=True
+```
+
+- Gemini API key: https://aistudio.google.com/app/apikey
+- Groq API key: https://console.groq.com/keys
+
+**5. Chạy server:**
+```bash
+uvicorn app.main:app --reload
+```
+
+Truy cập: **http://127.0.0.1:8000**
+
+Database `scamsieve.db` tự động tạo ở lần chạy đầu.
+
+---
+
+## Cấu trúc thư mục
+
+```
+Scam-Sieve/
+├── app/
+│   ├── main.py                    # Khởi tạo FastAPI app
+│   ├── config.py                  # Đọc biến môi trường từ .env
+│   ├── database.py                # SQLAlchemy engine & session
+│   ├── models/                    # Schema database (Blacklist, Report, ScanHistory...)
+│   ├── routers/
+│   │   ├── scan.py                # POST /scan, /api/gemini-consult, /api/ocr-extract
+│   │   ├── api_v1.py              # REST API /api/v1/...
+│   │   ├── reports.py             # Báo cáo cộng đồng
+│   │   └── pages.py              # Trang tĩnh
+│   ├── services/
+│   │   ├── gemini_service.py      # Tích hợp Gemini AI + Groq
+│   │   ├── blacklist_service.py   # Tra cứu blacklist SĐT/URL
+│   │   ├── threat_feed_service.py # Cập nhật URLhaus + OpenPhish
+│   │   └── domain_intel.py        # WHOIS + domain intelligence
+│   ├── detector/
+│   │   ├── rules.py               # 7 nhóm rule-based lừa đảo
+│   │   ├── heuristics.py          # 21 tiêu chí heuristic URL
+│   │   ├── scorer.py              # Tổng hợp điểm rủi ro
+│   │   ├── phone_utils.py         # Phân tích đầu số điện thoại
+│   │   ├── phobert_classifier.py  # PhoBERT inference
+│   │   ├── url_ml_classifier.py   # LightGBM URL classifier
+│   │   └── guardrails.py          # Đồng bộ kết quả AI với heuristic
+│   ├── templates/                 # Giao diện Jinja2
+│   └── static/                    # CSS, ảnh
+├── data/
+│   ├── labeled_messages.csv       # Dataset SMS có nhãn
+│   ├── url_phishing_dataset.csv   # Dataset URL phishing
+│   └── url_dataset_industrial.csv # Dataset URL từ nguồn thực tế
+├── extension/                     # Chrome Extension
+├── scripts/                       # Train model, đồng bộ dữ liệu
+├── tests/                         # 148 unit & integration tests
+├── .env.example                   # Mẫu cấu hình
+├── requirements.txt
+└── start_server.bat               # Chạy nhanh trên Windows
+```
+
+---
+
+## Chạy test
+
+```bash
+pytest -v
+```
+
+Kết quả: **148 passed**
+
+---
+
+## Cài đặt Extension trình duyệt
+
+1. Mở Chrome → `chrome://extensions/`
+2. Bật **Developer mode** (góc phải trên)
+3. Bấm **Load unpacked** → chọn thư mục `extension/`
+4. Extension tự động kiểm tra URL khi duyệt web
+
+> Extension cần server đang chạy tại `http://127.0.0.1:8000`
+
+---
+
+## Lưu ý bảo mật
+
+- File `.env` chứa API key — **không được đẩy lên GitHub** (đã có trong `.gitignore`)
+- Các file model `.joblib` không có trong repo (kích thước lớn) — cần train lại bằng script trong `scripts/`
+- Hệ thống sử dụng API Gemini và Groq — cần key hợp lệ để tính năng AI hoạt động; hệ thống rule-based vẫn hoạt động khi không có key
+
+---
+
+## Tác giả
+
+Dự án đại học — Hệ thống Phát hiện Lừa đảo Trực tuyến P-Sieve
