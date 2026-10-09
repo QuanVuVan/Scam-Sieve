@@ -16,9 +16,9 @@ scipy==1.18.1
 scikit-learn==1.9.1
 lightgbm==4.7.0
 
-# NLP
-torch==2.14.1
-transformers==5.19.0
+# NLP (PhoBERT - tùy chọn, chỉ cần khi chạy local với GPU/CPU mạnh)
+# torch==2.14.1
+# transformers==5.19.0
 
 # URL analysis
 tldextract==5.3.2
