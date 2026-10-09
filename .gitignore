@@ -17,10 +17,11 @@ secrets.json
 *.sqlite
 *.sqlite3
 
-# ------ Model ML đã train (file lớn, dùng Git LFS hoặc tải riêng) ------
-app/detector/ml_model.joblib
-app/detector/phobert_head.joblib
-app/detector/url_lgbm_model.joblib
+# ------ Model ML đã train (đưa lên repo để deploy được trên Render/Railway) ------
+# Nếu model quá lớn (>100MB) thì bỏ comment dòng dưới và dùng Git LFS
+# app/detector/ml_model.joblib
+# app/detector/phobert_head.joblib
+# app/detector/url_lgbm_model.joblib
 
 # ------ Python cache ------
 __pycache__/
