@@ -81,7 +81,8 @@ PROTECTED_BRANDS = {
         "viettelstore.vn", "tv360.vn", "vtscloud.vn",
         "viettel.go.link", "vietteltammi.go.link", "viettelmoney.go.link", "myvt.page.link"
     ],
-    "vinaphone": ["vinaphone.com.vn", "vnpt.com.vn", "vinaphone.vn", "vnpt.vn", "vnptmoney.vn", "vinaphone.vietlottsms.vn"],
+    "vinaphone": ["vinaphone.com.vn", "vnpt.com.vn", "vinaphone.vn", "vnpt.vn", "vnptmoney.vn", "vnptpay.vn", "vinaphone.vietlottsms.vn"],
+    "vnptpay": ["vnptpay.vn", "vnptmoney.vn"],
     "mobifone": ["mobifone.vn", "mobifone.com.vn", "mymobifone.page.link"],
 
     # 4. Khối Cơ quan Nhà nước & Dịch vụ công thiết yếu
@@ -105,7 +106,7 @@ PROTECTED_BRANDS = {
     "fpt": ["fpt.com.vn", "fptshop.com.vn", "fpt.vn", "fpt.edu.vn"],
     "zalo": ["zalo.me", "chat.zalo.me"],
     "facebook": ["facebook.com", "fb.com", "messenger.com", "instagram.com"],
-    "google": ["google.com", "google.com.vn", "youtube.com", "gmail.com"],
+    "google": ["google.com", "google.com.vn", "youtube.com", "gmail.com", "goo.gl"],
     "microsoft": ["microsoft.com", "office.com", "live.com"],
     "apple": ["apple.com", "icloud.com"],
     "telegram": ["telegram.org", "t.me"],

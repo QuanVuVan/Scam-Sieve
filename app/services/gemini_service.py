@@ -236,10 +236,11 @@ class GeminiSecurityService:
         # Thử lần lượt các model dự phòng
         last_error = ""
         for model in GEMINI_MODELS:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
             try:
                 with httpx.Client(timeout=4.5) as client:
-                    response = client.post(url, json=payload)
+                    response = client.post(url, json=payload, headers=headers)
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -383,10 +384,11 @@ class GeminiSecurityService:
 
         last_error = ""
         for model in GEMINI_MODELS:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
             try:
                 with httpx.Client(timeout=9.0) as client:
-                    response = client.post(url, json=payload)
+                    response = client.post(url, json=payload, headers=headers)
 
                 if response.status_code == 200:
                     data = response.json()
@@ -426,11 +428,28 @@ class GeminiSecurityService:
     ) -> Dict[str, Any]:
         """Phân tích ngữ cảnh web dự phòng offline bằng bộ quy tắc nâng cao tích hợp đối soát kỹ thuật."""
         combined = f"{url} {title} {text}".lower()
-        # 0. Bẫy ngân hàng / OTP / Mạo danh tổ chức tài chính
+
+        # 1. Bẫy việc làm / nhiệm vụ / cộng tác viên
+        job_scam_kw = ["tuyển ctv", "cộng tác viên", "làm tại nhà", "giật đơn", "chốt đơn", "hoa hồng", "nhiệm vụ", "xem video kiếm tiền", "like tiktok", "shopee tuyển", "tiki tuyển"]
+        matched_job = [kw for kw in job_scam_kw if kw in combined]
+
+        if len(matched_job) >= 2 or ("giật đơn" in combined) or ("tuyển ctv" in combined) or ("chốt đơn" in combined) or ("thu hồi vốn treo" in combined):
+            return {
+                "active": True,
+                "is_scam": True,
+                "confidence": 92.0,
+                "risk_level": "HIGH",
+                "scam_category": "Lừa đảo tuyển dụng / Việc làm online hoặc Thu hồi vốn treo",
+                "summary": "Nội dung trang web khớp với kịch bản lừa đảo dụ dỗ nạp tiền làm nhiệm vụ hoặc mạo danh chuyên gia lấy lại tiền.",
+                "analysis": "- Trang web đưa ra các cam kết việc làm thu nhập cao bất thường hoặc dịch vụ lấy lại tiền lừa đảo.\n- Đây là mô hình lừa đảo tài chính phổ biến nhằm chiếm đoạt tiền nạp ban đầu.",
+                "recommendation": "TUYỆT ĐỐI KHÔNG làm theo hướng dẫn, không chuyển tiền đặt cọc hoặc làm nhiệm vụ nạp vốn."
+            }
+
+        # 2. Bẫy ngân hàng / OTP / Mạo danh tổ chức tài chính
         bank_scam_kw = ["smart otp", "xác thực otp", "mã otp", "khóa tài khoản", "hủy lệnh", "chuyển tiền", "vietcombank", "techcombank", "mbbank", "bidv", "agribank", "vcb", "tcb", "mb bank", "vietinbank"]
         has_bank_kw = any(kw in combined for kw in bank_scam_kw)
         has_otp = any(kw in combined for kw in ["smart otp", "mã otp", "xác thực otp", "nhập otp", "mã xác thực", "otp", "token"])
-        if tech_is_scam or (has_bank_kw and has_otp) or ("smart otp" in combined) or ("xác thực otp" in combined):
+        if (has_bank_kw and has_otp) or ("smart otp" in combined) or ("xác thực otp" in combined):
             return {
                 "active": True,
                 "is_scam": True,
@@ -442,30 +461,10 @@ class GeminiSecurityService:
                 "recommendation": "CẢNH BÁO NGUY HIỂM: Tuyệt đối KHÔNG nhập mã OTP, mật khẩu hay số tài khoản."
             }
 
-        # 1. Bẫy việc làm / nhiệm vụ / cộng tác viên
-        job_scam_kw = ["tuyển ctv", "cộng tác viên", "làm tại nhà", "giật đơn", "chốt đơn", "hoa hồng", "nhiệm vụ", "xem video kiếm tiền", "like tiktok", "shopee tuyển", "tiki tuyển"]
-        matched_job = [kw for kw in job_scam_kw if kw in combined]
-        
-        # 2. Bẫy đầu tư / tài chính / tiền ảo
+        # 3. Bẫy đầu tư / tài chính / tiền ảo
         invest_scam_kw = ["lãi suất ngày", "cam kết lợi nhuận", "đầu tư thông minh", "chuyên gia đọc lệnh", "kéo vốn", "thu hồi vốn treo", "hỗ trợ lấy lại tiền"]
         matched_invest = [kw for kw in invest_scam_kw if kw in combined]
-
-        # 3. Bẫy cờ bạc / cá cược trá hình
-        gambling_kw = ["tài xỉu", "nổ hũ", "đá gà", "bắn cá", "cược bóng", "casino online", "tặng code tân thủ", "nạp rút 1 1"]
-        matched_gambling = [kw for kw in gambling_kw if kw in combined]
-
-        if len(matched_job) >= 2 or ("giật đơn" in combined) or ("kéo vốn" in combined) or ("thu hồi vốn treo" in combined):
-            return {
-                "active": True,
-                "is_scam": True,
-                "confidence": 92.0,
-                "risk_level": "HIGH",
-                "scam_category": "Lừa đảo tuyển dụng / Việc làm online hoặc Thu hồi vốn treo",
-                "summary": "Nội dung trang web khớp với kịch bản lừa đảo dụ dỗ nạp tiền làm nhiệm vụ hoặc mạo danh chuyên gia lấy lại tiền.",
-                "analysis": "- Trang web đưa ra các cam kết việc làm thu nhập cao bất thường hoặc dịch vụ lấy lại tiền lừa đảo.\n- Đây là mô hình lừa đảo tài chính phổ biến nhằm chiếm đoạt tiền nạp ban đầu.",
-                "recommendation": "TUYỆT ĐỐI KHÔNG làm theo hướng dẫn, không chuyển tiền đặt cọc hoặc làm nhiệm vụ nạp vốn."
-            }
-        elif len(matched_invest) >= 2:
+        if len(matched_invest) >= 2 or ("kéo vốn" in combined):
             return {
                 "active": True,
                 "is_scam": True,
@@ -649,9 +648,10 @@ class GeminiSecurityService:
 
         # 3. Dự phòng qua Google Gemini
         for model in GEMINI_MODELS:
-            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
             try:
-                resp = self._http_client.post(endpoint, json=payload)
+                resp = self._http_client.post(endpoint, json=payload, headers=headers)
                 if resp.status_code == 200:
                     data = resp.json()
                     candidates = data.get("candidates", [])

@@ -420,3 +420,20 @@ class TestAdvancedScamScenarios:
         matches = check_suspicious_url(f"Bấm vào đường link nhận thưởng: {open_redir_url}")
         rule_ids = [m.rule_id for m in matches]
         assert "open_redirect_abuse" in rule_ids
+
+    def test_zalo_me_scam_not_bypassed(self):
+        from app.detector.scorer import RiskScorer
+        scorer = RiskScorer()
+        scam_text = "Tuyển CTV làm việc tại nhà chốt đơn lương 500k/ngày nhận tiền ngay, bấm vào https://zalo.me/g/abcxyz để vào nhóm nhận nhiệm vụ"
+        res = scorer.analyze_message(scam_text)
+        assert res["is_scam"] is True
+        assert res["risk_level"] in ("MEDIUM", "HIGH")
+        assert res["risk_score"] >= 50.0
+
+    def test_scam_with_legit_url_not_bypassed(self):
+        from app.detector.scorer import RiskScorer
+        scorer = RiskScorer()
+        scam_text = "Yêu cầu cung cấp mã OTP xác thực ngay nếu không tài khoản sẽ bị khóa. Chi tiết xem tại https://vietcombank.com.vn"
+        res = scorer.analyze_message(scam_text)
+        assert res["is_scam"] is True
+        assert res["risk_level"] in ("MEDIUM", "HIGH")

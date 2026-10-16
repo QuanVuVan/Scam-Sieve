@@ -88,15 +88,33 @@ class TestThreatFeedService:
             db.close()
 
     def test_api_v1_threat_intel_endpoints(self):
-        # 1. Test POST sync endpoint
-        resp_sync = client.post("/api/v1/threat-intel/sync", json={"limit_per_feed": 5})
+        admin_headers = {"X-Admin-API-Key": "psieve-admin-secret-key-2024"}
+
+        # 1. Test POST sync endpoint without auth (must fail with 401)
+        resp_unauth = client.post("/api/v1/threat-intel/sync", json={"limit_per_feed": 5})
+        assert resp_unauth.status_code == 401
+
+        # 2. Test POST sync endpoint with wrong key (must fail with 401)
+        resp_wrong = client.post(
+            "/api/v1/threat-intel/sync",
+            json={"limit_per_feed": 5},
+            headers={"X-Admin-API-Key": "wrong-key"}
+        )
+        assert resp_wrong.status_code == 401
+
+        # 3. Test POST sync endpoint with valid key (must succeed with 200)
+        resp_sync = client.post(
+            "/api/v1/threat-intel/sync",
+            json={"limit_per_feed": 5},
+            headers=admin_headers
+        )
         assert resp_sync.status_code == 200
         data_sync = resp_sync.json()
         assert data_sync["success"] is True
         assert "total_domains_in_memory" in data_sync
         assert data_sync["total_domains_in_memory"] > 0
 
-        # 2. Test GET stats endpoint
+        # 4. Test GET stats endpoint
         resp_stats = client.get("/api/v1/threat-intel/stats")
         assert resp_stats.status_code == 200
         data_stats = resp_stats.json()

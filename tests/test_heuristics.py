@@ -113,3 +113,42 @@ class TestHeuristicsEngine:
         failed_ids_visual = [c["id"] for c in res_visual["criteria"] if c["status"] == "FAIL"]
         assert "brand_spoofing" in failed_ids_visual
 
+    def test_ssrf_protection_in_unshortener(self):
+        from app.services.domain_intel import domain_intel
+        # Loopback IPv4
+        url_loopback, chain = domain_intel.resolve_multi_hop_redirects("http://127.0.0.1:8000/secret")
+        assert url_loopback == "http://127.0.0.1:8000/secret"
+        assert len(chain) == 1
+
+        # Localhost
+        url_local, chain_local = domain_intel.resolve_multi_hop_redirects("http://localhost:3000/api")
+        assert url_local == "http://localhost:3000/api"
+        assert len(chain_local) == 1
+
+        # Cloud Metadata IP
+        url_meta, chain_meta = domain_intel.resolve_multi_hop_redirects("http://169.254.169.254/latest/meta-data")
+        assert url_meta == "http://169.254.169.254/latest/meta-data"
+        assert len(chain_meta) == 1
+
+        # Private LAN IP
+        url_lan, chain_lan = domain_intel.resolve_multi_hop_redirects("http://192.168.1.1/admin")
+        assert url_lan == "http://192.168.1.1/admin"
+        assert len(chain_lan) == 1
+
+        # Disallowed scheme
+        is_safe, msg = domain_intel.is_safe_public_url("file:///etc/passwd")
+        assert is_safe is False
+
+    def test_vnptpay_and_play_app_googl_not_typosquatting(self):
+        from app.detector.patterns.url_patterns import check_brand_impersonation
+        # vnptpay.vn không bị gán nhầm là typosquatting vnpay
+        r_vnpt = check_brand_impersonation("vnptpay.vn")
+        assert r_vnpt["is_impersonation"] is False
+        assert r_vnpt.get("is_authorized") is True
+
+        # play.app.goo.gl không bị gán nhầm là typosquatting apple
+        r_goo = check_brand_impersonation("play.app.goo.gl")
+        assert r_goo["is_impersonation"] is False
+        assert r_goo.get("is_authorized") is True
+
+

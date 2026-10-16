@@ -6,6 +6,8 @@ Dịch vụ Tình báo Tên miền Chuyên sâu (In-depth Domain Intelligence En
 3. Truy vấn Tuổi tên miền & Ngày đăng ký qua giao thức RDAP (IETF RFC 7482) với bộ nhớ đệm Cache LRU.
    - Phát hiện tên miền lừa đảo "dùng một lần" mới đăng ký dưới 30 ngày (Disposable Phishing Domains).
 """
+import ipaddress
+import socket
 import re
 import urllib.parse
 import logging
@@ -37,6 +39,61 @@ class DomainIntelligenceEngine:
             "top", "vip", "cc", "club", "ru", "online", "bond", "xyz", "site", "tech", "band", "me", "info", "buzz"
         }
 
+    @staticmethod
+    def is_safe_public_url(target_url: str) -> Tuple[bool, str]:
+        """
+        Kiểm tra và ngăn chặn lỗ hổng SSRF (Server-Side Request Forgery):
+        1. Chỉ cho phép các giao thức chuẩn web: http, https.
+        2. Chặn tuyệt đối loopback (127.0.0.1, ::1), IP nội bộ (10.x, 172.16.x, 192.168.x),
+           Link-local (169.254.x / cloud metadata), Multicast và tên miền cục bộ (.local, .internal, .lan, localhost).
+        3. Phân giải DNS và kiểm tra toàn bộ địa chỉ IP trả về.
+        """
+        try:
+            parsed = urllib.parse.urlparse(target_url)
+            scheme = (parsed.scheme or "").lower()
+            if scheme not in ("http", "https"):
+                return False, f"Giao thức không được hỗ trợ hoặc bị chặn: {scheme}"
+            
+            hostname = parsed.hostname
+            if not hostname:
+                return False, "URL không chứa hostname hợp lệ"
+                
+            hostname_lower = hostname.lower().strip()
+            
+            # Chặn tên miền nội bộ phổ biến
+            if hostname_lower in ("localhost", "0.0.0.0") or hostname_lower.endswith((".local", ".internal", ".lan", ".corp", ".home")):
+                return False, f"Hostname nội bộ bị chặn: {hostname}"
+
+            # Phân giải DNS
+            try:
+                addr_info = socket.getaddrinfo(hostname_lower, None)
+            except socket.gaierror:
+                return False, f"Không thể phân giải tên miền: {hostname}"
+            except Exception as e:
+                return False, f"Lỗi DNS lookup: {e}"
+
+            # Kiểm tra tất cả IP tương ứng
+            for item in addr_info:
+                ip_str = item[4][0]
+                try:
+                    ip = ipaddress.ip_address(ip_str)
+                    if (
+                        ip.is_private
+                        or ip.is_loopback
+                        or ip.is_link_local
+                        or ip.is_multicast
+                        or ip.is_reserved
+                        or ip.is_unspecified
+                        or str(ip).startswith("169.254.")
+                    ):
+                        return False, f"Địa chỉ IP nội bộ bị chặn (SSRF Protection): {ip_str}"
+                except ValueError:
+                    return False, f"Địa chỉ IP không hợp lệ: {ip_str}"
+
+            return True, "URL công khai an toàn"
+        except Exception as e:
+            return False, f"Lỗi xác thực URL: {e}"
+
     def extract_domain_parts(self, url_or_domain: str) -> Dict[str, str]:
         """
         Bóc tách chính xác tên miền theo chuẩn Public Suffix List.
@@ -67,8 +124,9 @@ class DomainIntelligenceEngine:
 
     def resolve_multi_hop_redirects(self, url: str, max_hops: int = 5, timeout: float = 2.0) -> Tuple[str, List[str]]:
         """
-        Giải mã đệ quy đa tầng các liên kết rút gọn ngụy trang (Multi-hop Unshortener).
-        Dò theo chuỗi chuyển hướng HTTP (tối đa max_hops bước) để tìm ra website đích thực sự.
+        Giải mã đệ quy đa tầng các liên kết rút gọn ngụy trang (Multi-hop Unshortener) với cơ chế phòng thủ SSRF:
+        1. Kiểm tra an toàn SSRF ở từng bước hop (chặn IP private/loopback, chỉ chấp nhận http/https).
+        2. Dò theo chuỗi chuyển hướng HTTP (tối đa max_hops bước) để tìm ra website đích thực sự.
         """
         if not url:
             return url, []
@@ -78,29 +136,46 @@ class DomainIntelligenceEngine:
             return self._unshorten_cache[clean_url], [clean_url, self._unshorten_cache[clean_url]]
 
         current_url = clean_url if clean_url.startswith(("http://", "https://")) else "http://" + clean_url
+        
+        # Kiểm tra SSRF hop đầu tiên
+        is_safe, reason = self.is_safe_public_url(current_url)
+        if not is_safe:
+            logger.warning(f"Chặn chuyển hướng URL do nguy cơ SSRF: {current_url} ({reason})")
+            return current_url, [current_url]
+
         redirect_chain = [current_url]
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-        try:
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-            with httpx.Client(follow_redirects=True, timeout=timeout, headers=headers) as client:
-                resp = client.head(current_url)
-                final_url = str(resp.url)
-                if final_url != current_url:
-                    redirect_chain.append(final_url)
-                    self._unshorten_cache[clean_url] = final_url
-                    return final_url, redirect_chain
-        except Exception:
+        for hop in range(max_hops):
             try:
-                with httpx.Client(follow_redirects=True, timeout=timeout, headers=headers) as client:
-                    resp = client.get(current_url, headers={"Range": "bytes=0-200"})
-                    final_url = str(resp.url)
-                    if final_url != current_url:
-                        redirect_chain.append(final_url)
-                        self._unshorten_cache[clean_url] = final_url
-                        return final_url, redirect_chain
-            except Exception as e:
-                logger.debug(f"Không thể trace chuyển hướng cho URL {url}: {e}")
+                with httpx.Client(follow_redirects=False, timeout=timeout, headers=headers) as client:
+                    try:
+                        resp = client.head(current_url)
+                    except Exception:
+                        resp = client.get(current_url, headers={"Range": "bytes=0-200"})
 
+                    if resp.status_code in (301, 302, 303, 307, 308):
+                        location = resp.headers.get("Location")
+                        if not location:
+                            break
+                        next_url = urllib.parse.urljoin(current_url, location)
+                        # Kiểm tra an toàn SSRF trước khi theo chuyển hướng
+                        is_safe_hop, hop_reason = self.is_safe_public_url(next_url)
+                        if not is_safe_hop:
+                            logger.warning(f"Chặn hop chuyển tiếp do nguy cơ SSRF: {next_url} ({hop_reason})")
+                            break
+                        if next_url in redirect_chain:
+                            break
+                        current_url = next_url
+                        redirect_chain.append(current_url)
+                    else:
+                        break
+            except Exception as e:
+                logger.debug(f"Dừng dò chuyển hướng tại hop {hop} cho URL {current_url}: {e}")
+                break
+
+        if len(redirect_chain) > 1:
+            self._unshorten_cache[clean_url] = current_url
         return current_url, redirect_chain
 
     def query_domain_age(self, registered_domain: str, timeout: float = 2.0) -> Dict[str, Any]:

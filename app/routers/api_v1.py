@@ -6,7 +6,7 @@ RESTful API V1 dành cho Client mở rộng:
 """
 import logging
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, Query, File, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, Query, File, UploadFile, HTTPException, Security, Header
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -579,6 +579,60 @@ def api_v1_inspect_heuristics(
     return result
 
 
+import time
+from fastapi.security import APIKeyHeader
+from app.config import settings
+
+ADMIN_API_KEY_HEADER = APIKeyHeader(name="X-Admin-API-Key", auto_error=False)
+
+# Rate limiter in-memory cho endpoint đồng bộ
+_last_sync_times: List[float] = []
+_SYNC_RATE_LIMIT_WINDOW = 60.0  # 60 giây
+_SYNC_MAX_CALLS = 5  # Tối đa 5 lần trong 60 giây
+
+
+def verify_admin_access(
+    api_key_header: Optional[str] = Security(ADMIN_API_KEY_HEADER),
+    authorization: Optional[str] = Header(None),
+) -> bool:
+    """
+    Xác thực quyền quản trị viên thông qua X-Admin-API-Key hoặc Bearer token.
+    Ngăn chặn việc kẻ gian tự ý kích hoạt đồng bộ dữ liệu đè nặng tài nguyên server.
+    """
+    expected_key = getattr(settings, "ADMIN_API_KEY", "psieve-admin-secret-key-2024")
+    token = None
+    if api_key_header:
+        token = api_key_header
+    elif authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+
+    if not token or token != expected_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Truy cập bị từ chối: Yêu cầu khóa quản trị hợp lệ (Header 'X-Admin-API-Key' hoặc 'Authorization: Bearer <KEY>').",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    return True
+
+
+def check_sync_rate_limit():
+    """
+    Giới hạn tần suất gọi đồng bộ dữ liệu (Rate Limiting).
+    Tối đa 5 lần mỗi 60 giây.
+    """
+    now = time.time()
+    global _last_sync_times
+    _last_sync_times = [t for t in _last_sync_times if now - t < _SYNC_RATE_LIMIT_WINDOW]
+    if len(_last_sync_times) >= _SYNC_MAX_CALLS:
+        retry_after = int(_SYNC_RATE_LIMIT_WINDOW - (now - _last_sync_times[0]))
+        raise HTTPException(
+            status_code=429,
+            detail=f"Quá giới hạn tần suất đồng bộ threat intel (Tối đa {_SYNC_MAX_CALLS} lần/phút). Vui lòng thử lại sau {retry_after} giây.",
+            headers={"Retry-After": str(max(1, retry_after))},
+        )
+    _last_sync_times.append(now)
+
+
 class ThreatIntelSyncRequest(BaseModel):
     limit_per_feed: Optional[int] = Field(default=300, description="Giới hạn số lượng bản ghi tối đa lấy từ mỗi nguồn cấp")
 
@@ -587,10 +641,12 @@ class ThreatIntelSyncRequest(BaseModel):
 def api_v1_sync_threat_intel(
     req: Optional[ThreatIntelSyncRequest] = None,
     db: Session = Depends(get_db),
+    _auth: bool = Depends(verify_admin_access),
+    _rate: None = Depends(check_sync_rate_limit),
 ):
     """
     Kích hoạt đồng bộ hóa tự động nguồn cấp Tình báo Mối đe dọa Quốc tế & Việt Nam (URLhaus, OpenPhish, P-Sieve Seeds).
-    Cập nhật đồng thời In-Memory Cache (RAM) và SQLite Blacklist.
+    Yêu cầu xác thực khóa quản trị (X-Admin-API-Key) và áp dụng Rate Limit chống DoS.
     """
     limit = req.limit_per_feed if req else 300
     from app.services.threat_feed_service import threat_feed_service

@@ -16,3 +16,4 @@ services:
       - key: DEBUG
         value: false
     autoDeploy: true
+

@@ -21,14 +21,35 @@ from app.models import user, blacklist, report, scan as scan_model  # noqa: F401
 # chua dung Alembic o buoc nay).
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="P-Sieve")
+from contextlib import asynccontextmanager
 
-# Kich hoat CORS de Chrome Extension va Client co the ket noi den API
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Quản lý vòng đời ứng dụng FastAPI (Lifespan Context Manager):
+    Tự động nạp toàn bộ danh sách đen tên miền từ SQLite vào bộ nhớ đệm RAM O(1) khi máy chủ khởi động.
+    """
+    from app.database import SessionLocal
+    from app.services.blacklist_service import threat_intel
+    db = SessionLocal()
+    try:
+        threat_intel.load_from_database(db)
+    finally:
+        db.close()
+    yield
+
+
+app = FastAPI(title="P-Sieve", lifespan=lifespan)
+
+# Kích hoạt CORS có kiểm soát: Giới hạn danh sách Origin và hỗ trợ Chrome/Edge Extension
+cors_origins = settings.ALLOWED_ORIGINS if settings.ALLOWED_ORIGINS else ["http://localhost:8000", "http://127.0.0.1:8000"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"^chrome-extension://.*",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -42,20 +63,6 @@ app.include_router(scan.router)
 app.include_router(reports.router)
 app.include_router(chat.router)
 app.include_router(api_v1.router)
-
-
-@app.on_event("startup")
-def startup_load_threat_intelligence():
-    """
-    Tự động nạp toàn bộ danh sách đen tên miền từ SQLite vào bộ nhớ đệm RAM O(1) khi máy chủ khởi động.
-    """
-    from app.database import SessionLocal
-    from app.services.blacklist_service import threat_intel
-    db = SessionLocal()
-    try:
-        threat_intel.load_from_database(db)
-    finally:
-        db.close()
 
 # Cac router sau se duoc them dan o cac buoc tiep theo:
 # app.include_router(auth.router)      # Buoc 6

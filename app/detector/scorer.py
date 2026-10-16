@@ -23,11 +23,10 @@ class RiskScorer:
             'vib.com.vn', 'vietcombank.com.vn', 'techcombank.com.vn', 'mbbank.com.vn', 'acb.com.vn',
             'bidv.com.vn', 'agribank.com.vn', 'vpbank.com.vn', 'tpbank.com.vn', 'sacombank.com.vn', 'msb.com.vn',
             'vietinbank.vn', 'hdbank.com.vn', 'shb.com.vn', 'ocb.com.vn', 'seabank.com.vn', 'lpbank.com.vn',
-            'momo.vn', 'zalopay.vn', 'zalo.me', 'vnpay.vn',
-            # Viễn thông & Dịch vụ số
+            'momo.vn', 'zalopay.vn', 'vnpay.vn',
             'viettel.vn', 'vietteltelecom.vn', 'viettelmoney.vn', 'viettelpay.vn', 'vtp.vn',
             'tv360.vn', 'vtscloud.vn', 'viettelstore.vn',
-            'mobifone.vn', 'mobifone.com.vn', 'vinaphone.vn', 'vinaphone.com.vn', 'vnpt.vn', 'vietnamobile.com.vn',
+            'mobifone.vn', 'mobifone.com.vn', 'vinaphone.vn', 'vinaphone.com.vn', 'vnpt.vn', 'vnptpay.vn', 'vnptmoney.vn', 'vietnamobile.com.vn',
             # Thương mại điện tử & Giao vận
             'shopee.vn', 'lazada.vn', 'tiki.vn', 'sendo.vn', 'grab.com', 'be.com.vn', 'ahamove.com',
             'thegioididong.com', 'dienmayxanh.com', 'fptshop.com.vn', 'cellphones.com.vn', 'hoanghamobile.com',
@@ -120,40 +119,42 @@ class RiskScorer:
                 return result
 
             # 1. TẦNG BẢO VỆ TUYỆT ĐỐI (Contextual Whitelist & Blacklist O(1))
+            all_urls_trusted = bool(url_features_list) and all(
+                any(f.get("netloc", "") == domain or f.get("netloc", "").endswith('.' + domain) for domain in self.TRUSTED_DOMAINS)
+                and not f.get("is_suspicious_tld")
+                and not f.get("is_brand_impersonation")
+                for f in url_features_list
+            )
+
             for features in url_features_list:
                 netloc = features.get("netloc", "")
 
-                # Bypass: Cơ quan nhà nước và Giáo dục (chỉ khi không có hành vi đe dọa)
-                if (netloc.endswith('.gov.vn') or netloc.endswith('.edu.vn')) and not has_threat:
-                    result["reason"].append(f"Official Gov/Edu domain bypass: {netloc}")
-                    result["risk_level"] = "LOW"
-                    return result
-
-                # Bypass: Danh sách thương hiệu và nền tảng Marketing uy tín
-                # CHỈ bypass khi TẤT CẢ các URL trong tin nhắn đều thuộc TRUSTED_DOMAINS và không có URL lạ/nguy cơ đi kèm
-                has_credential_alert = bool(re.search(r'(?:mat khau|password|telegram code|ma dang nhap|bi lo|bi lo thong tin|dang nhap vao|ro ri|ma xac minh)', raw_text.lower()))
-                all_urls_trusted = all(
-                    any(f.get("netloc", "") == domain or f.get("netloc", "").endswith('.' + domain) for domain in self.TRUSTED_DOMAINS)
-                    and not f.get("is_suspicious_tld")
-                    and not f.get("is_brand_impersonation")
-                    for f in url_features_list
-                )
-                if not has_scam_indicator and not has_credential_alert and all_urls_trusted and any(netloc == domain or netloc.endswith('.' + domain) for domain in self.TRUSTED_DOMAINS):
-                    result["reason"].append(f"Trusted Brand/Marketing domain bypass: {netloc}")
-                    result["risk_level"] = "LOW"
-                    return result
-
+                # Miễn trừ điểm phạt URL nếu tên miền thuộc cơ quan, ngân hàng hoặc tổ chức chính thống
+                # (Không bỏ qua toàn bộ để tránh trường hợp kẻ gian chèn link tin cậy kèm văn bản lừa đảo)
+                is_gov_edu = (netloc.endswith('.gov.vn') or netloc.endswith('.edu.vn')) and not has_threat
                 from app.services.blacklist_service import threat_intel
                 is_safe, is_malicious = threat_intel.check_domain_risk(netloc)
-                if is_safe:
-                    result["reason"].append(f"Whitelisted domain: {netloc}")
-                    result["risk_level"] = "LOW"
-                    return result
+                
                 if is_malicious:
                     result["is_scam"] = True
                     result["risk_score"] = 100.0
                     result["reason"].append(f"Blacklisted malicious domain: {netloc}")
                     result["risk_level"] = "HIGH"
+                    return result
+
+                if is_gov_edu or (all_urls_trusted and any(netloc == domain or netloc.endswith('.' + domain) for domain in self.TRUSTED_DOMAINS)) or is_safe:
+                    features["is_trusted_domain"] = True
+                    result["reason"].append(f"Tên miền chính thống được xác thực: {netloc}")
+
+            # Nếu nội dung chỉ là một URL chính thống độc lập (không kèm văn bản đe dọa lừa đảo)
+            words = raw_text.split()
+            is_standalone_url = len(words) <= 2 and bool(urls)
+            has_credential_alert = bool(re.search(r'(?:mat khau|password|telegram code|ma dang nhap|bi lo|bi lo thong tin|dang nhap vao|ro ri|ma xac minh)', raw_text.lower()))
+            if all_urls_trusted and not has_scam_indicator and not has_credential_alert:
+                if is_standalone_url:
+                    result["risk_score"] = 0.0
+                    result["is_scam"] = False
+                    result["risk_level"] = "LOW"
                     return result
 
             # 2. CHẤM ĐIỂM TỔNG HỢP (ML + Heuristics + Obfuscation + Phishing/Email)
@@ -263,6 +264,8 @@ class RiskScorer:
     def _evaluate_url_heuristics(self, url_features_list: List[Dict]) -> float:
         score = 0.0
         for features in url_features_list:
+            if features.get("is_trusted_domain"):
+                continue
             if features.get("is_ip_domain"):
                 score += 80.0
             if features.get("subdomain_count", 0) >= 2:
@@ -405,7 +408,10 @@ class RiskScorer:
                     # Đánh giá URL độc lập qua pipeline chuyên biệt
                     url_analysis = self.analyze_message(content_clean)
                     url_risk_val = url_analysis.get("risk_score", 0.0)
-                    if url_risk_val >= 70.0:
+                    if url_analysis.get("risk_level") == "LOW" or url_risk_val == 0.0:
+                        safe_prob = 100.0
+                        scam_prob = 0.0
+                    elif url_risk_val >= 70.0:
                         scam_prob = float(url_risk_val)
                         safe_prob = max(0.0, 100.0 - scam_prob)
                     elif rule_score == 0 and not has_scam_indicator:
@@ -432,7 +438,7 @@ class RiskScorer:
         reasons = []
 
         # TÌNH HUỐNG 1: Xác nhận An toàn qua Whitelist / Guardrail / Cảnh báo bảo mật
-        if is_safe_service or is_trusted_domain or is_bank_warning:
+        if is_safe_service or is_bank_warning or (is_trusted_domain and rule_score == 0 and not has_scam_indicator and scam_prob < 30.0):
             matches = [m for m in matches if getattr(m, 'rule_id', '') in hard_critical_rule_ids]
             unified_score = 0
             risk_level = RiskLevel.LOW
