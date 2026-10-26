@@ -3,6 +3,7 @@
 // 17 Tiêu chí chuẩn ChongLuaDao + 4 Tiêu chí đặc quyền P-Sieve Việt Nam
 
 const API_CANDIDATE_BASES = [
+  "https://p-sieve.onrender.com/api/v1",
   "http://127.0.0.1:8001/api/v1",
   "http://127.0.0.1:8000/api/v1"
 ];
@@ -34,9 +35,9 @@ const KNOWN_MALICIOUS_DOMAINS = [
   "vieclam-tainha.site"
 ];
 
-let activeOrigin = "http://127.0.0.1:8001";
+let activeOrigin = "https://p-sieve.onrender.com";
 
-async function requestApi(endpoint, options = {}, timeoutMs = 4000) {
+async function requestApi(endpoint, options = {}, timeoutMs = 8000) {
   let lastError = null;
   for (const base of API_CANDIDATE_BASES) {
     try {

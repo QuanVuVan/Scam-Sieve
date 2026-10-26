@@ -3,6 +3,7 @@
 // Ho tro Service Worker khong lo loi Mixed Content hoac chan mang cuc bo
 
 const API_CANDIDATE_BASES = [
+  "https://p-sieve.onrender.com/api/v1",
   "http://127.0.0.1:8001/api/v1",
   "http://127.0.0.1:8000/api/v1"
 ];
@@ -45,7 +46,7 @@ async function fetchApi(endpoint, body = null, method = "GET") {
   for (const base of API_CANDIDATE_BASES) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       const options = {
         method,
         headers: { "Content-Type": "application/json" },

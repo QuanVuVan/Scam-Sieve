@@ -208,6 +208,18 @@ class RiskScorer:
                 words = raw_text.split()
                 if len(words) <= 10 and not urls and not emails and obfuscation_score < 0.20 and not has_scam_indicator:
                     logger.info("Bypassed AI scoring for short URL-free conversational message.")
+                elif is_standalone_url:
+                    from app.detector.url_ml_classifier import url_classifier
+                    target_url = urls[0] if urls else raw_text
+                    url_ml_res = url_classifier.predict(target_url)
+                    if url_ml_res.get("model_available"):
+                        ml_score = url_ml_res.get("risk_score", 0.0)
+                        if ml_score >= 70.0:
+                            score = max(score, ml_score * 0.85)
+                            result["reason"].append(f"Mô hình AI URL phát hiện cấu trúc lừa đảo ({ml_score:.1f}%)")
+                        elif ml_score > 50.0:
+                            score += ml_score * 0.4
+                            result["reason"].append(f"Mô hình AI URL cảnh báo nghi vấn ({ml_score:.1f}% xác suất)")
                 else:
                     from app.detector.text_utils import prepare_model_input
                     model_input = prepare_model_input(raw_text)
