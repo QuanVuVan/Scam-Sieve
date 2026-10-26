@@ -2,33 +2,63 @@
 Diem khoi dau cua ung dung ScamSieve.
 Chay bang: uvicorn app.main:app --reload
 """
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.config import settings
 from app.database import Base, engine
 from app.routers import pages, scan, reports, api_v1, chat
 
-# Import cac model de SQLAlchemy Base.metadata "biet" ve tat ca cac bang
-# truoc khi goi create_all(). Neu them model moi, nho import them o day.
-# Dat alias "scan_model" vi ten module trung voi app.routers.scan da import o tren.
+# Import cac model de SQLAlchemy Base.metadata "biet" ve tat ca cac bang truoc khi create_all()
 from app.models import user, blacklist, report, scan as scan_model  # noqa: F401
 
+logger = logging.getLogger(__name__)
+
 # Tao bang trong DB neu chua ton tai.
-# Cach don gian, phu hop giai doan dev/hoc tap (xem README de biet ly do
-# chua dung Alembic o buoc nay).
 Base.metadata.create_all(bind=engine)
 
-from contextlib import asynccontextmanager
+
+async def periodic_threat_sync():
+    """
+    Tiến trình chạy ngầm (Background Worker) tự động cập nhật tình báo đe dọa:
+    Định kỳ mỗi 6 giờ tự động kéo các tên miền phishing mới từ URLhaus và OpenPhish
+    vào SQLite Blacklist và nạp tức thời vào bộ nhớ đệm RAM O(1).
+    """
+    from app.database import SessionLocal
+    from app.services.threat_feed_service import threat_feed_service
+
+    # Chờ 20 giây sau khi máy chủ khởi động hoàn tất trước khi chạy lần đầu
+    await asyncio.sleep(20)
+    while True:
+        try:
+            logger.info("Bắt đầu tự động cập nhật danh sách đen từ OpenPhish & URLhaus...")
+            db = SessionLocal()
+            try:
+                res = threat_feed_service.sync_all_feeds(db, limit_per_feed=250)
+                logger.info(f"Hoàn tất cập nhật: +{res.get('new_db_domains_inserted')} tên miền mới vào Blacklist.")
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning(f"Lỗi trong tiến trình đồng bộ Threat Intel định kỳ: {e}")
+
+        # Chu kỳ lặp lại: 6 giờ (21.600 giây)
+        await asyncio.sleep(21600)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Quản lý vòng đời ứng dụng FastAPI (Lifespan Context Manager):
-    Tự động nạp toàn bộ danh sách đen tên miền từ SQLite vào bộ nhớ đệm RAM O(1) khi máy chủ khởi động.
+    1. Tự động nạp toàn bộ danh sách đen tên miền từ SQLite vào bộ nhớ đệm RAM O(1) khi máy chủ khởi động.
+    2. Kích hoạt tiến trình chạy ngầm tự động đồng bộ đe dọa định kỳ.
     """
     from app.database import SessionLocal
     from app.services.blacklist_service import threat_intel
@@ -37,7 +67,12 @@ async def lifespan(app: FastAPI):
         threat_intel.load_from_database(db)
     finally:
         db.close()
+
+    # Kích hoạt worker ngầm tự động cập nhật danh sách đen
+    sync_task = asyncio.create_task(periodic_threat_sync())
     yield
+    # Hủy tác vụ ngầm khi tắt server
+    sync_task.cancel()
 
 
 app = FastAPI(title="P-Sieve", lifespan=lifespan)
@@ -53,7 +88,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Session dua tren cookie (HttpOnly). Dung cho dang nhap o Buoc 6.
+# Session dua tren cookie (HttpOnly).
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -63,9 +98,3 @@ app.include_router(scan.router)
 app.include_router(reports.router)
 app.include_router(chat.router)
 app.include_router(api_v1.router)
-
-# Cac router sau se duoc them dan o cac buoc tiep theo:
-# app.include_router(auth.router)      # Buoc 6
-# app.include_router(history.router)   # Buoc 6
-# app.include_router(reports.router)   # Buoc 6
-# app.include_router(admin.router)     # Buoc 6
