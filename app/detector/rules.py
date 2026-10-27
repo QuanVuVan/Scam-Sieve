@@ -802,6 +802,48 @@ def check_bts_station_spoofing(text: str) -> list[RuleMatch]:
     return []
 
 
+_TRANSFER_MEMO_EXPLANATION = (
+    "Nội dung cung cấp thông tin tài khoản chuyển tiền cá nhân kèm cú pháp nghi vấn (xuất kho, nạp tiền, làm nhiệm vụ, phí cọc...) "
+    "không qua cổng thanh toán bảo mật. Đây là phương thức thường gặp trong các kịch bản lừa đảo tuyển dụng làm nhiệm vụ, nhận quà hoặc tài khoản trung gian rửa tiền (Money Mule)."
+)
+
+
+def check_suspicious_transfer_memo(text: str) -> list[RuleMatch]:
+    """
+    Kiểm tra dấu hiệu hướng dẫn chuyển tiền vào tài khoản cá nhân với nội dung nghi vấn
+    (thường gặp trong lừa đảo làm nhiệm vụ, xuất kho, nạp tiền, cọc đơn...).
+    """
+    if not text or not text.strip():
+        return []
+
+    normalized = normalize_text(text)
+
+    # 1. Nhận diện ngân hàng hoặc từ khóa tài khoản
+    bank_pattern = r'(?:vp\s*bank|vietcombank|techcombank|mbbank|mb\s*bank|bidv|agribank|acb|tpbank|sacombank|vib|vietinbank|shb|hdbank|msb|ocb|lpbank|seabank|bacabank|scb|namabank|pvcombank|kienlongbank|vietbank|ngan\s+hang|stk\b|so\s+tai\s+khoan|so\s+tk)'
+    has_bank = bool(re.search(bank_pattern, normalized))
+
+    # 2. Nhận diện dãy số tài khoản / số điện thoại người nhận (8-16 chữ số)
+    has_account_number = bool(re.search(r'\b\d{8,16}\b', text))
+
+    # 3. Nhận diện cú pháp / nội dung chuyển khoản nghi vấn
+    memo_pattern = r'(?:xuat\s+kho|xuat\s+don|nap\s+tien|rut\s+tien|phi\s+ship|phi\s+ho\s+so|phi\s+xuat|coc\s+don|dat\s+coc|lam\s+nhiem\s+vu|nhiem\s+vu|hoa\s+hong|mo\s+khoa|\b\d+k\s+(?:xuat|nap|coc|don|phi)|\b\d+k\b.*?(?:xuat|kho|don|nap))'
+    has_suspicious_memo = bool(re.search(memo_pattern, normalized))
+
+    if has_bank and has_account_number and has_suspicious_memo:
+        snippet_match = re.search(memo_pattern, normalized)
+        snippet = snippet_match.group(0) if snippet_match else text[:30]
+        return [
+            RuleMatch(
+                rule_id="suspicious_transfer_memo",
+                category="Chỉ dẫn chuyển tiền / Tài khoản trung gian nghi vấn",
+                snippet=snippet,
+                score=60,
+                explanation=_TRANSFER_MEMO_EXPLANATION,
+            )
+        ]
+    return []
+
+
 def detect_all(text: str) -> list[RuleMatch]:
     """
     Diem vao chinh: chay tat ca cac rule THUAN TUY (khong DB) da co, gop
@@ -820,4 +862,5 @@ def detect_all(text: str) -> list[RuleMatch]:
     matches.extend(check_bts_station_spoofing(text))
     matches.extend(check_prize(text))
     matches.extend(check_app_install(text))
+    matches.extend(check_suspicious_transfer_memo(text))
     return matches

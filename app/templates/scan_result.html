@@ -63,17 +63,15 @@
     </div>
 
     <!-- BANNER UNG CUU KHAN CAP KHI PHAT HIEN NGUY HIEM -->
-    {% if risk_level == 'HIGH' or (ai_result and ai_result.is_scam) %}
-    <div class="emergency-alert-banner">
+    <div id="emergency-alert-banner" class="emergency-alert-banner" style="{% if not (risk_level == 'HIGH' or (ai_result and ai_result.is_scam)) %}display: none;{% endif %}">
         <div class="emergency-alert-content">
-            <strong class="emergency-alert-title">CANH BAO NGUY HIEM - DANG CO DAU HIEU LUA DAO</strong>
+            <strong class="emergency-alert-title">CẢNH BÁO NGUY HIỂM - ĐANG CÓ DẤU HIỆU LỪA ĐẢO</strong>
             <p class="emergency-alert-desc">Nếu bạn hoặc người thân đã lỡ chuyển tiền, cung cấp mã xác thực OTP hoặc cài đặt ứng dụng theo yêu cầu này, hãy kích hoạt quy trình ứng cứu khẩn cấp ngay để phong tỏa tài sản.</p>
         </div>
         <button type="button" class="btn btn-emergency-banner" onclick="openEmergencyModal()">
             Ứng cứu khẩn cấp ngay
         </button>
     </div>
-    {% endif %}
 
     <!-- Khoi hien thi ket qua giam dinh hinh anh (neu la Quet hinh anh) -->
     {% if image_preview %}
@@ -294,6 +292,32 @@
                     if (data.is_scam) {
                         card.classList.add('gemini-alert');
                         card.classList.remove('gemini-safe');
+
+                        // Đồng bộ đồng hồ đo điểm số và banner phía trên nếu ban đầu điểm thấp
+                        const staticNum = document.getElementById('animated-score-static');
+                        const staticBar = document.getElementById('score-circle-bar-static');
+                        const currentStatic = parseInt(staticNum ? staticNum.innerText : '0', 10) || 0;
+                        if (currentStatic < 60) {
+                            const newScore = Math.round(data.confidence || 85);
+                            if (staticNum) staticNum.innerText = newScore;
+                            if (staticBar) {
+                                const r = 48;
+                                const circ = 2 * Math.PI * r;
+                                staticBar.style.strokeDashoffset = circ - (circ * newScore / 100);
+                                staticBar.style.stroke = '#ef4444';
+                            }
+                            const staticCard = document.querySelector('.risk-card-item');
+                            if (staticCard) {
+                                staticCard.classList.remove('risk-low', 'risk-medium');
+                                staticCard.classList.add('risk-high');
+                                const heading = staticCard.querySelector('.risk-status-heading');
+                                if (heading) heading.innerText = 'Cảnh báo nguy cơ lừa đảo (AI thẩm định)';
+                                const advice = staticCard.querySelector('.risk-card-desc p');
+                                if (advice && data.recommendation) advice.innerText = data.recommendation;
+                            }
+                            const banner = document.getElementById('emergency-alert-banner');
+                            if (banner) banner.style.display = 'flex';
+                        }
                     } else {
                         card.classList.add('gemini-safe');
                         card.classList.remove('gemini-alert');

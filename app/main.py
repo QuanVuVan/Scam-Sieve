@@ -68,11 +68,21 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
-    # Kích hoạt worker ngầm tự động cập nhật danh sách đen
-    sync_task = asyncio.create_task(periodic_threat_sync())
+    # Kích hoạt worker ngầm tự động cập nhật danh sách đen (bỏ qua khi đang chạy test)
+    import sys
+    import os
+    is_testing = "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ
+    sync_task = None
+    if not is_testing:
+        sync_task = asyncio.create_task(periodic_threat_sync())
     yield
     # Hủy tác vụ ngầm khi tắt server
-    sync_task.cancel()
+    if sync_task:
+        sync_task.cancel()
+        try:
+            await sync_task
+        except (asyncio.CancelledError, Exception):
+            pass
 
 
 app = FastAPI(title="P-Sieve", lifespan=lifespan)

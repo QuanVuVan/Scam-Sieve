@@ -339,7 +339,7 @@ class RiskScorer:
             "display_name_email_spoofing", "free_email_impersonation",
             "disposable_phishing_domain_age", "blacklisted_phone",
             "blacklisted_domain", "telecom_prefix_intelligence",
-            "url_lexical_ml_threat", "suspicious_url", "raw_ip_domain"
+            "url_lexical_ml_threat", "suspicious_url", "raw_ip_domain", "suspicious_transfer_memo"
         }
         has_hard_critical = any(getattr(m, 'rule_id', '') in hard_critical_rule_ids for m in matches)
         has_critical_rule = has_hard_critical or any(getattr(m, 'rule_id', '') == "vision_scam_evidence" for m in matches)
@@ -408,7 +408,11 @@ class RiskScorer:
         obfuscation = 0.0
         words = content_clean.split()
         is_standalone_url = len(words) <= 2 and bool(urls)
-        is_short_conversational = len(words) <= 12 and not urls
+        has_bank_or_transfer = bool(re.search(
+            r'(?:vp\s*bank|vietcombank|techcombank|mbbank|mb\s*bank|bidv|agribank|acb|tpbank|sacombank|vib|vietinbank|shb|hdbank|msb|ocb|lpbank|seabank|bacabank|scb|namabank|pvcombank|kienlongbank|vietbank|ngan\s+hang|stk\b|so\s+tai\s+khoan|so\s+tk|chuyen\s+khoan|ck\b|xuat\s+kho|xuat\s+don|nap\s+tien|rut\s+tien|phi\s+ship|coc\s+don|dat\s+coc|lam\s+nhiem\s+vu|\b\d+k\b)',
+            content_clean.lower()
+        ))
+        is_short_conversational = len(words) <= 12 and not urls and not has_bank_or_transfer and not has_threat and not has_job_scam and rule_score == 0
 
         if self.ml_model and content_clean:
             try:
