@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def train_and_save_model():
-    data_path = 'data/labeled_messages.csv'
+    data_path = 'data/train_messages_80pct.csv'  # 80% Train set tách biệt độc lập để chống Data Leakage
     model_save_path = 'app/detector/ml_model.joblib'
 
     logger.info("1. Đang tải và tiền xử lý dữ liệu với Dual-Representation (Có dấu & Không dấu)...")
