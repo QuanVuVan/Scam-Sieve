@@ -259,8 +259,33 @@ def scan_submit(
     from app.services.gemini_service import gemini_service
     gemini_enabled = gemini_service.is_configured()
 
-    display = _RISK_DISPLAY[risk_level]
+    # Tích hợp AI thẩm định chuyên sâu trực tiếp tại Backend (Server-side AI Consultation)
+    # Áp dụng Công thức 4: S_final = round(beta * S_base + (1 - beta) * S_AI)
+    gemini_consult = None
+    if gemini_enabled:
+        try:
+            gemini_consult = api_gemini_consult(content=content, db=db)
+            if gemini_consult and gemini_consult.get("active"):
+                ai_conf = float(gemini_consult.get("confidence", 85.0))
+                if gemini_consult.get("is_scam"):
+                    beta = 0.4
+                    score = int(min(100, max(score, round(beta * score + (1.0 - beta) * ai_conf))))
+                    if score >= 70:
+                        risk_level = RiskLevel.HIGH
+                    elif score >= 40:
+                        risk_level = RiskLevel.MEDIUM
+                    ai_result["scam_prob"] = float(score)
+                    ai_result["is_scam"] = True
+                    ai_result["status_label"] = "Cảnh báo nguy cơ lừa đảo (AI thẩm định)"
+                    if gemini_consult.get("recommendation"):
+                        ai_result["summary"] = gemini_consult["recommendation"]
+                elif score < 40 and not gemini_consult.get("is_scam"):
+                    ai_result["scam_prob"] = min(ai_result.get("scam_prob", 0.0), 5.0)
+                    ai_result["safe_prob"] = 100.0 - ai_result["scam_prob"]
+        except Exception as e:
+            logger.warning(f"Server-side AI consultation warning: {e}")
 
+    display = _RISK_DISPLAY[risk_level]
     community_stats = get_community_stats(content, db)
 
     return templates.TemplateResponse(
@@ -278,6 +303,7 @@ def scan_submit(
             "matches": matches,
             "ai_result": ai_result,
             "gemini_enabled": gemini_enabled,
+            "gemini_consult": gemini_consult,
             "community_stats": community_stats,
         },
     )

@@ -210,33 +210,44 @@
     </div>
     {% endif %}
 
-    <!-- Khoi danh gia chi tiet (Tai bat dong bo, khong bao gio gay do man hinh) -->
+    <!-- Khoi danh gia chi tiet (Tich hop AI truc tiep tu Server - Phan hoi tuc thi) -->
     {% if gemini_enabled %}
-    <section id="gemini-card" class="gemini-card">
+    <section id="gemini-card" class="gemini-card {% if gemini_consult %}{% if gemini_consult.is_scam %}gemini-alert{% else %}gemini-safe{% endif %}{% endif %}">
         <div class="gemini-header">
             <div class="gemini-title-wrap">
                 <h3 class="gemini-title">Đánh giá chi tiết</h3>
             </div>
-            <span id="gemini-status-tag" class="gemini-category-tag">Đang kiểm tra...</span>
+            <span id="gemini-status-tag" class="gemini-category-tag">
+                {% if gemini_consult %}{{ gemini_consult.category or "Hoàn tất đánh giá" }}{% else %}Đang kiểm tra...{% endif %}
+            </span>
         </div>
 
-        <!-- Trang thai dang tai -->
-        <div id="gemini-loading" class="gemini-loading-box">
+        <!-- Trang thai dang tai (Chi hien khi chua co ket qua tu server) -->
+        <div id="gemini-loading" class="gemini-loading-box" {% if gemini_consult %}style="display: none;"{% endif %}>
             <div class="gemini-pulse-dot"></div>
             <span>Đang đối soát dữ liệu và phân tích ngữ cảnh...</span>
         </div>
 
         <!-- Trang thai ket qua thanh cong -->
-        <div id="gemini-result-body" style="display: none;">
+        <div id="gemini-result-body" {% if not gemini_consult %}style="display: none;"{% endif %}>
             <div class="gemini-body">
-                <ul id="gemini-analysis-list" class="gemini-analysis-list"></ul>
-                <div id="gemini-rec-box" class="gemini-rec" style="display: none;">
-                    <strong>Khuyến nghị an toàn:</strong> <span id="gemini-rec-text"></span>
+                <ul id="gemini-analysis-list" class="gemini-analysis-list">
+                    {% if gemini_consult and gemini_consult.analysis %}
+                        {% for line in gemini_consult.analysis.split('\n') %}
+                            {% set clean_line = line.strip().lstrip('-*• ').strip() %}
+                            {% if clean_line %}
+                                <li>{{ clean_line }}</li>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </ul>
+                <div id="gemini-rec-box" class="gemini-rec" {% if not (gemini_consult and gemini_consult.recommendation) %}style="display: none;"{% endif %}>
+                    <strong>Khuyến nghị an toàn:</strong> <span id="gemini-rec-text">{{ gemini_consult.recommendation if gemini_consult else '' }}</span>
                 </div>
             </div>
             <div class="gemini-meta">
-                <span id="gemini-confidence-text"></span>
-                <span id="gemini-model-text"></span>
+                <span id="gemini-confidence-text">Độ tin cậy: {{ gemini_consult.confidence if gemini_consult else 95 }}%</span>
+                <span id="gemini-model-text">Nguồn dữ liệu: {{ gemini_consult.model_used if gemini_consult else 'Trực tuyến' }}</span>
             </div>
         </div>
 
@@ -249,6 +260,8 @@
 
     <script>
         const scanContent = {{ content|tojson }};
+        const precomputedConsult = {{ gemini_consult|tojson if gemini_consult else 'null' }};
+
         function formatToBullets(text) {
             if (!text) return [];
             let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
@@ -266,6 +279,8 @@
         }
 
         function fetchGeminiAnalysis() {
+            if (precomputedConsult && precomputedConsult.active) return;
+
             const card = document.getElementById('gemini-card');
             const loading = document.getElementById('gemini-loading');
             const resultBody = document.getElementById('gemini-result-body');
@@ -375,7 +390,11 @@
             });
         }
 
-        document.addEventListener('DOMContentLoaded', fetchGeminiAnalysis);
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!precomputedConsult || !precomputedConsult.active) {
+                fetchGeminiAnalysis();
+            }
+        });
     </script>
     {% endif %}
 
