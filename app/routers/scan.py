@@ -369,17 +369,23 @@ def api_gemini_consult(
 
     # 5. Đồng bộ hóa kết quả (Harmonization) - Đảm bảo Đánh giá chi tiết không bao giờ mâu thuẫn:
     from app.detector.guardrails import guardrail
+    import urllib.parse
     urls = url_extractor.extract_urls(content)
-    is_trusted_domain = bool(urls) and all(
-        any(
-            url_extractor.extract_features(u).get("netloc", "").endswith("." + d)
-            or url_extractor.extract_features(u).get("netloc", "") == d
-            or url_extractor.extract_features(u).get("netloc", "").endswith(".gov.vn")
-            or url_extractor.extract_features(u).get("netloc", "").endswith(".edu.vn")
-            for d in scorer.TRUSTED_DOMAINS
-        )
-        for u in urls
-    )
+    trusted_set = set(scorer.TRUSTED_DOMAINS)
+    is_trusted_domain = False
+    if urls:
+        is_trusted_domain = True
+        for u in urls:
+            parsed = urllib.parse.urlparse(u if "://" in u else "http://" + u)
+            u_netloc = parsed.netloc.lower().split(":")[0]
+            if not (
+                u_netloc in trusted_set
+                or any(u_netloc.endswith("." + d) for d in trusted_set)
+                or u_netloc.endswith(".gov.vn")
+                or u_netloc.endswith(".edu.vn")
+            ):
+                is_trusted_domain = False
+                break
     is_official_hotline = bool(phone_info and (phone_info.get("type") in ["VN_HOTLINE", "BRANDNAME"] or phone_info.get("is_verified_official")))
     is_bank_warning = guardrail.has_bank_security_warning(content)
     is_safe_service = guardrail.is_safe_service_bypass(content, has_threat_indicators=False, has_urls=bool(urls))

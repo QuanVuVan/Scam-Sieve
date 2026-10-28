@@ -4,6 +4,9 @@ import json
 import logging
 import httpx
 from typing import Dict, Any, Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +31,11 @@ class GeminiSecurityService:
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", DEFAULT_GEMINI_API_KEY)
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY", DEFAULT_GROQ_API_KEY)
         self._http_client = httpx.Client(
-            timeout=httpx.Timeout(connect=2.5, read=4.5, write=2.5, pool=3.0),
-            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20, keepalive_expiry=60.0)
+            timeout=httpx.Timeout(connect=2.5, read=5.0, write=2.5, pool=3.0),
+            limits=httpx.Limits(max_keepalive_connections=20, max_connections=50, keepalive_expiry=120.0)
         )
         self._semantic_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
+        self._message_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
 
     def is_configured(self) -> bool:
         return bool((self.api_key and self.api_key.strip()) or (self.groq_api_key and self.groq_api_key.strip()))
@@ -151,12 +155,12 @@ class GeminiSecurityService:
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": user_content}
                 ],
+                "response_format": {"type": "json_object"},
                 "temperature": 0.1,
-                "max_tokens": 600
+                "max_tokens": 450
             }
             try:
-                with httpx.Client(timeout=4.0) as client:
-                    resp = client.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
+                resp = self._http_client.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
                 if resp.status_code == 200:
                     data = resp.json()
                     choices = data.get("choices", [])
@@ -269,6 +273,7 @@ class GeminiSecurityService:
         Phân tích chuyên sâu tin nhắn / nội dung bằng kiến trúc Multi-AI Song Song:
         1. Ưu tiên số 1: Groq LPU (Qwen 27B / GPT-OSS) - Tốc độ siêu tốc (0.3s - 0.7s).
         2. Chạy song song / Dự phòng: Google Gemini (2.0 Flash / 1.5 Flash).
+        3. Tích hợp bộ nhớ đệm In-Memory Cache (TTL: 600s) phản hồi tức thì 0.001s khi tra cứu lặp lại.
         """
         if not self.is_configured():
             return {"active": False, "error": "Chưa cấu hình API Key"}
@@ -276,16 +281,29 @@ class GeminiSecurityService:
         if not text or not text.strip():
             return {"active": False, "error": "Nội dung trống"}
 
+        # 0. Kiểm tra bộ nhớ đệm In-Memory (Phản hồi tức thì < 1ms)
+        import time
+        now = time.time()
+        cache_key = text.strip()
+        if hasattr(self, "_message_cache") and cache_key in self._message_cache:
+            c_time, c_data = self._message_cache[cache_key]
+            if now - c_time < 600:
+                return dict(c_data)
+
         # 1. Thử phân tích qua Groq LPU siêu tốc
         if self.groq_api_key and self.groq_api_key.strip():
             groq_res = self._analyze_with_groq(text)
             if groq_res and groq_res.get("active"):
+                if hasattr(self, "_message_cache"):
+                    self._message_cache[cache_key] = (now, dict(groq_res))
                 return groq_res
 
         # 2. Dự phòng qua Google Gemini
         if self.api_key and self.api_key.strip():
             gemini_res = self._analyze_with_gemini(text)
             if gemini_res and gemini_res.get("active"):
+                if hasattr(self, "_message_cache"):
+                    self._message_cache[cache_key] = (now, dict(gemini_res))
                 return gemini_res
 
         return {
