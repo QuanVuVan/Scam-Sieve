@@ -21,8 +21,8 @@ GROQ_MODELS = [
 
 GEMINI_MODELS = [
     "gemini-3-flash-preview",
-    "gemini-3.6-flash",
     "gemini-3.5-flash",
+    "gemini-3.6-flash",
     "gemini-flash-latest",
 ]
 
@@ -31,12 +31,17 @@ class GeminiSecurityService:
     def __init__(self, api_key: Optional[str] = None, groq_api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", DEFAULT_GEMINI_API_KEY)
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY", DEFAULT_GROQ_API_KEY)
+        raw_keys = os.getenv("GEMINI_API_KEYS", "")
+        self.gemini_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+        if self.api_key and self.api_key not in self.gemini_keys:
+            self.gemini_keys.insert(0, self.api_key)
         self._http_client = httpx.Client(
             timeout=httpx.Timeout(connect=2.5, read=5.0, write=2.5, pool=3.0),
             limits=httpx.Limits(max_keepalive_connections=20, max_connections=50, keepalive_expiry=120.0)
         )
         self._semantic_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
         self._message_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
+        self._image_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
 
     def is_configured(self) -> bool:
         return bool((self.api_key and self.api_key.strip()) or (self.groq_api_key and self.groq_api_key.strip()))
@@ -348,6 +353,20 @@ class GeminiSecurityService:
         compressed_bytes, mime_type = self._preprocess_image(image_bytes, max_dim=1000)
 
         import base64
+        import hashlib
+        import time
+
+        # Kiểm tra Bộ nhớ đệm ảnh (Image Cache) để trả về ngay lập tức (0.001s)
+        img_hash = hashlib.sha256(compressed_bytes).hexdigest()
+        now = time.time()
+        if hasattr(self, "_image_cache") and img_hash in self._image_cache:
+            ts, cached_res = self._image_cache[img_hash]
+            if now - ts < 7200:  # Lưu cache trong 2 giờ
+                cached_copy = dict(cached_res)
+                cached_copy["cached"] = True
+                logger.info(f"Image scan cache HIT for hash {img_hash[:10]}")
+                return cached_copy
+
         b64_data = base64.b64encode(compressed_bytes).decode("utf-8")
 
         system_instruction = (
@@ -414,48 +433,54 @@ class GeminiSecurityService:
                 }
             ],
             "generationConfig": {
-                "temperature": 0.2,
+                "temperature": 0.1,
                 "topP": 0.95,
-                "maxOutputTokens": 1536,
+                "maxOutputTokens": 800,
+                "responseMimeType": "application/json",
             }
         }
 
         last_error = ""
-        for model in GEMINI_MODELS:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-            headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
-            try:
-                with httpx.Client(timeout=10.0) as client:
-                    response = client.post(url, json=payload, headers=headers)
+        keys_to_try = getattr(self, "gemini_keys", []) or ([self.api_key] if self.api_key else [])
 
-                if response.status_code == 200:
-                    data = response.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        content_part = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                        parsed_json = self._parse_json_response(content_part)
-                        if parsed_json:
-                            parsed_json["active"] = True
-                            parsed_json["model_used"] = model
-                            return parsed_json
-                elif response.status_code == 429:
-                    last_error = f"Model {model} chạm hạn mức (HTTP 429)"
-                    logger.warning(f"Gemini Vision API quota exceeded (HTTP 429) on model {model}, trying next model...")
+        for key in keys_to_try:
+            for model in GEMINI_MODELS:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+                headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
+                try:
+                    with httpx.Client(timeout=6.0) as client:
+                        response = client.post(url, json=payload, headers=headers)
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            content_part = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                            parsed_json = self._parse_json_response(content_part)
+                            if parsed_json:
+                                parsed_json["active"] = True
+                                parsed_json["model_used"] = model
+                                if hasattr(self, "_image_cache"):
+                                    self._image_cache[img_hash] = (time.time(), parsed_json)
+                                return parsed_json
+                    elif response.status_code == 429:
+                        last_error = f"Model {model} chạm hạn mức (HTTP 429)"
+                        logger.warning(f"Gemini Vision API quota exceeded (HTTP 429) on model {model}, trying next...")
+                        continue
+                    elif response.status_code == 503:
+                        last_error = f"Model {model} quá tải (HTTP 503)"
+                        logger.warning(f"Gemini Vision API 503 high demand on model {model}, trying next...")
+                        continue
+                    else:
+                        last_error = f"Model {model} HTTP {response.status_code}"
+                        logger.warning(f"Gemini Vision API warning: {last_error}")
+                except httpx.TimeoutException:
+                    last_error = f"Model {model} phản hồi quá lâu (Timeout)"
+                    logger.warning(f"Gemini Vision API timeout on model {model}, trying next...")
                     continue
-                elif response.status_code == 503:
-                    last_error = f"Model {model} quá tải (HTTP 503)"
-                    logger.warning(f"Gemini Vision API 503 high demand on model {model}, trying next model...")
-                    continue
-                else:
-                    last_error = f"Model {model} HTTP {response.status_code}"
-                    logger.warning(f"Gemini Vision API warning: {last_error}")
-            except httpx.TimeoutException:
-                last_error = f"Model {model} phản hồi quá lâu (Timeout)"
-                logger.warning(f"Gemini Vision API timeout on model {model}, trying next model...")
-                continue
-            except Exception as e:
-                last_error = str(e)
-                logger.error(f"Error calling Gemini Vision model {model}: {e}")
+                except Exception as e:
+                    last_error = str(e)
+                    logger.error(f"Error calling Gemini Vision model {model}: {e}")
 
         # Neu khong co model nao phan hoi kip thoi, kich hoat che do bao ve noi bo thay vi bao loi
         return self._generate_fallback_vision_result(reason=last_error)
