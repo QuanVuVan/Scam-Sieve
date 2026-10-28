@@ -8,11 +8,12 @@ from typing import List, Dict, Any, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Danh bạ TLD quốc tế nguy cơ cao được phân tích theo thống kê an ninh mạng mới nhất
+# Danh bạ TLD quốc tế nguy cơ cao được phân tích theo thống kê an ninh mạng mới nhất (Spamhaus & APWG)
+# Loại bỏ các TLD chính thống hợp pháp như de, io, app, me, us để tránh dương tính giả
 SUSPICIOUS_TLDS = {
-    "top", "vip", "cc", "club", "ru", "online", "bond", "xyz", "site", "tech", "band", "me", "info",
-    "cam", "fit", "sbs", "cfd", "icu", "buzz", "space", "rest", "lat", "bid", "work", "live", "life", "monster",
-    "de", "shop", "link", "run", "biz", "to", "app", "pro", "io", "us", "cyou"
+    "top", "xyz", "club", "vip", "cfd", "sbs", "icu", "buzz", "monster", "cc",
+    "cam", "fit", "cyou", "bond", "lat", "bid", "gq", "ml", "cf", "tk", "ga",
+    "rest", "work", "space", "click", "link", "live", "life", "stream", "download"
 }
 
 # Từ khóa nghiệp vụ bẫy lừa đảo thường bị ghép với thương hiệu (Combosquatting)

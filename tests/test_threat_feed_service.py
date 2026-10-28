@@ -79,7 +79,7 @@ class TestThreatFeedService:
         service = ThreatFeedService(timeout_sec=1)
         db = SessionLocal()
         try:
-            with patch("requests.get", side_effect=Exception("No internet connection")):
+            with patch("app.services.threat_feed_service.requests.get", side_effect=Exception("No internet connection")):
                 res = service.sync_all_feeds(db=db, limit_per_feed=10, include_offline_seeds=True)
                 assert res["success"] is True
                 assert res["total_domains_in_memory"] >= 9
@@ -90,35 +90,45 @@ class TestThreatFeedService:
     def test_api_v1_threat_intel_endpoints(self):
         admin_headers = {"X-Admin-API-Key": "psieve-admin-secret-key-2024"}
 
-        # 1. Test POST sync endpoint without auth (must fail with 401)
-        resp_unauth = client.post("/api/v1/threat-intel/sync", json={"limit_per_feed": 5})
-        assert resp_unauth.status_code == 401
+        with TestClient(app) as tc:
+            # 1. Test POST sync endpoint without auth (must fail with 401)
+            resp_unauth = tc.post("/api/v1/threat-intel/sync", json={"limit_per_feed": 5})
+            assert resp_unauth.status_code == 401
 
-        # 2. Test POST sync endpoint with wrong key (must fail with 401)
-        resp_wrong = client.post(
-            "/api/v1/threat-intel/sync",
-            json={"limit_per_feed": 5},
-            headers={"X-Admin-API-Key": "wrong-key"}
-        )
-        assert resp_wrong.status_code == 401
+            # 2. Test POST sync endpoint with wrong key (must fail with 401)
+            resp_wrong = tc.post(
+                "/api/v1/threat-intel/sync",
+                json={"limit_per_feed": 5},
+                headers={"X-Admin-API-Key": "wrong-key"}
+            )
+            assert resp_wrong.status_code == 401
 
-        # 3. Test POST sync endpoint with valid key (must succeed with 200)
-        resp_sync = client.post(
-            "/api/v1/threat-intel/sync",
-            json={"limit_per_feed": 5},
-            headers=admin_headers
-        )
-        assert resp_sync.status_code == 200
-        data_sync = resp_sync.json()
-        assert data_sync["success"] is True
-        assert "total_domains_in_memory" in data_sync
-        assert data_sync["total_domains_in_memory"] > 0
+            # 3. Test POST sync endpoint with valid key (must succeed with mock)
+            with patch.object(threat_feed_service, "sync_all_feeds") as mock_sync:
+                mock_sync.return_value = {
+                    "success": True,
+                    "urlhaus_domains_fetched": 5,
+                    "openphish_domains_fetched": 5,
+                    "new_db_domains_inserted": 2,
+                    "total_domains_in_memory": 12,
+                    "duration_seconds": 0.45
+                }
+                resp_sync = tc.post(
+                    "/api/v1/threat-intel/sync",
+                    json={"limit_per_feed": 5},
+                    headers=admin_headers
+                )
+                assert resp_sync.status_code == 200
+                data_sync = resp_sync.json()
+                assert data_sync["success"] is True
+                assert "total_domains_in_memory" in data_sync["result"]
+                assert data_sync["result"]["total_domains_in_memory"] > 0
 
-        # 4. Test GET stats endpoint
-        resp_stats = client.get("/api/v1/threat-intel/stats")
-        assert resp_stats.status_code == 200
-        data_stats = resp_stats.json()
-        assert "total_domains_in_memory" in data_stats
-        assert "total_domains_in_database" in data_stats
-        assert "source_distribution" in data_stats
+            # 4. Test GET stats endpoint
+            resp_stats = tc.get("/api/v1/threat-intel/stats")
+            assert resp_stats.status_code == 200
+            data_stats = resp_stats.json()
+            assert "total_domains_in_memory" in data_stats
+            assert "total_domains_in_database" in data_stats
+            assert "source_distribution" in data_stats
 

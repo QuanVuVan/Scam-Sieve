@@ -24,26 +24,26 @@ from app.detector.patterns.url_patterns import (
 )
 
 LEXICAL_FEATURE_NAMES = [
-    "url_len",             # 1. Tổng độ dài URL
-    "domain_len",          # 2. Độ dài tên miền
-    "path_len",            # 3. Độ dài path
-    "query_len",           # 4. Độ dài query
-    "subdomain_count",     # 5. Số lượng cấp con subdomain
-    "dot_count",           # 6. Số lượng dấu chấm
-    "hyphen_count",        # 7. Số lượng dấu gạch nối (Domain squatting)
-    "at_count",            # 8. Ký tự @ (Credential spoofing)
-    "question_count",      # 9. Ký tự ?
-    "percent_count",       # 10. Ký tự % (Mã hóa ngụy trang)
-    "equal_count",         # 11. Ký tự =
-    "slash_count",         # 12. Ký tự /
-    "underscore_count",    # 13. Ký tự _
-    "digit_ratio_url",     # 14. Tỷ lệ ký tự số trên toàn URL
-    "digit_ratio_domain",  # 15. Tỷ lệ ký tự số trong tên miền
-    "is_ip",               # 16. Địa chỉ IP làm host
-    "entropy_url",         # 17. Độ hỗn loạn Shannon Entropy toàn URL
-    "entropy_domain",      # 18. Độ hỗn loạn Shannon Entropy tên miền
-    "suspicious_tld",      # 19. Thuộc TLD nguy cơ cao
-    "has_phish_kw"         # 20. Chứa từ khóa tấn công / giả mạo
+    "url_len",                  # 1. Tổng độ dài URL
+    "domain_len",               # 2. Độ dài tên miền
+    "path_len",                 # 3. Độ dài path
+    "query_len",                # 4. Độ dài query
+    "subdomain_count",          # 5. Số lượng cấp con subdomain
+    "dot_count_domain",         # 6. Số lượng dấu chấm trong tên miền (Subdomain deception)
+    "hyphen_count_domain",      # 7. Số lượng dấu gạch nối trong tên miền (Domain squatting)
+    "hyphen_count_path",        # 8. Số lượng dấu gạch nối trong path (Kebab-case slug)
+    "at_count",                 # 9. Ký tự @ (Credential spoofing)
+    "percent_count",            # 10. Ký tự % (Mã hóa ngụy trang)
+    "slash_count",              # 11. Ký tự / (Độ sâu thư mục)
+    "digit_ratio_url",          # 12. Tỷ lệ ký tự số trên toàn URL
+    "digit_ratio_domain",       # 13. Tỷ lệ ký tự số trong tên miền
+    "is_ip",                    # 14. Địa chỉ IP làm host
+    "entropy_url",              # 15. Độ hỗn loạn Shannon Entropy toàn URL
+    "entropy_domain",           # 16. Độ hỗn loạn Shannon Entropy tên miền
+    "suspicious_tld",           # 17. Thuộc TLD nguy cơ cao
+    "has_domain_phish_kw",      # 18. Chứa từ khóa tấn công/giả mạo trong tên miền
+    "has_path_phish_kw",        # 19. Chứa từ khóa tấn công nguy cơ cao trong path
+    "is_https"                  # 20. Sử dụng giao thức HTTPS (1.0) hay HTTP (0.0)
 ]
 
 
@@ -58,8 +58,11 @@ def calculate_entropy(text: str) -> float:
 def extract_20_lexical_features(url_str: str) -> List[float]:
     """
     Trích xuất đúng 20 đặc trưng Lexical thuần túy trực tiếp từ chuỗi URL trong thời gian thực.
+    Đã tinh chỉnh chống học vẹt (Anti-Shortcut Learning): tách biệt dấu gạch nối domain và path,
+    phân biệt từ khóa trong hostname vs path, loại bỏ việc phạt sai các slug bài viết hoặc docs dài.
     """
     url = str(url_str or "").strip()
+    is_https = 1.0 if url.lower().startswith("https://") else 0.0
     parsed = urlparse(url if "://" in url else f"http://{url}")
     path = parsed.path
     query = parsed.query
@@ -72,6 +75,10 @@ def extract_20_lexical_features(url_str: str) -> List[float]:
     domain_parts = netloc.split('.')
     subdomain_count = max(0, len(domain_parts) - 2) if len(domain_parts) >= 2 else 0
 
+    dot_count_domain = float(netloc.count('.'))
+    hyphen_count_domain = float(netloc.count('-'))
+    hyphen_count_path = float(path.count('-'))
+
     digits_url = sum(c.isdigit() for c in url)
     digit_ratio_url = digits_url / max(len(url), 1)
 
@@ -83,7 +90,8 @@ def extract_20_lexical_features(url_str: str) -> List[float]:
     suspicious_tld = 1.0 if tld in SUSPICIOUS_TLDS else 0.0
 
     all_keywords = PHISHING_DOMAIN_KEYWORDS.union(COMBOSQUATTING_KEYWORDS)
-    has_phish_kw = 1.0 if any(kw in url.lower() for kw in all_keywords) else 0.0
+    has_domain_phish_kw = 1.0 if any(kw in netloc for kw in all_keywords) else 0.0
+    has_path_phish_kw = 1.0 if any(kw in path.lower() for kw in PHISHING_DOMAIN_KEYWORDS) else 0.0
 
     return [
         float(len(url)),                                # 1. url_len
@@ -91,21 +99,21 @@ def extract_20_lexical_features(url_str: str) -> List[float]:
         float(len(path)),                               # 3. path_len
         float(len(query)),                              # 4. query_len
         float(subdomain_count),                         # 5. subdomain_count
-        float(url.count('.')),                          # 6. dot_count
-        float(url.count('-')),                          # 7. hyphen_count
-        float(url.count('@')),                          # 8. at_count
-        float(url.count('?')),                          # 9. question_count
+        float(dot_count_domain),                        # 6. dot_count_domain
+        float(hyphen_count_domain),                     # 7. hyphen_count_domain
+        float(hyphen_count_path),                       # 8. hyphen_count_path
+        float(url.count('@')),                          # 9. at_count
         float(url.count('%')),                          # 10. percent_count
-        float(url.count('=')),                          # 11. equal_count
-        float(url.count('/')),                          # 12. slash_count
-        float(url.count('_')),                          # 13. underscore_count
-        float(digit_ratio_url),                         # 14. digit_ratio_url
-        float(digit_ratio_domain),                      # 15. digit_ratio_domain
-        1.0 if is_ip else 0.0,                          # 16. is_ip
-        float(calculate_entropy(url)),                  # 17. entropy_url
-        float(calculate_entropy(netloc)),               # 18. entropy_domain
-        float(suspicious_tld),                          # 19. suspicious_tld
-        float(has_phish_kw)                             # 20. has_phish_kw
+        float(min(url.count('/'), 6.0)),                # 11. slash_count (chặn trần 6 để không phạt nhầm đường dẫn sâu của GitHub/Docs)
+        float(digit_ratio_url),                         # 12. digit_ratio_url
+        float(digit_ratio_domain),                      # 13. digit_ratio_domain
+        1.0 if is_ip else 0.0,                          # 14. is_ip
+        float(calculate_entropy(url)),                  # 15. entropy_url
+        float(calculate_entropy(netloc)),               # 16. entropy_domain
+        float(suspicious_tld),                          # 17. suspicious_tld
+        float(has_domain_phish_kw),                     # 18. has_domain_phish_kw
+        float(has_path_phish_kw),                       # 19. has_path_phish_kw
+        float(is_https)                                 # 20. is_https
     ]
 
 

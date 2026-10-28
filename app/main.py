@@ -71,7 +71,13 @@ async def lifespan(app: FastAPI):
     # Kích hoạt worker ngầm tự động cập nhật danh sách đen (bỏ qua khi đang chạy test)
     import sys
     import os
-    is_testing = "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ
+    is_testing = (
+        "pytest" in sys.modules
+        or "PYTEST_CURRENT_TEST" in os.environ
+        or any("pytest" in str(arg).lower() for arg in sys.argv)
+        or any("test" in str(arg).lower() for arg in sys.argv)
+        or os.getenv("TESTING", "").lower() in ("true", "1")
+    )
     sync_task = None
     if not is_testing:
         sync_task = asyncio.create_task(periodic_threat_sync())
