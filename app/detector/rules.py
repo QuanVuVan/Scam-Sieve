@@ -179,7 +179,12 @@ def check_urgent_transfer(text: str) -> list[RuleMatch]:
 
     normalized = normalize_text(text)
 
+    # Loại trừ trường hợp ngân hàng hướng dẫn khách hàng tự khóa/hỗ trợ phong tỏa tài khoản phòng vệ
+    is_defensive_freeze = bool(re.search(r'(?:ho\s+tro|yeu\s+cau|de)\s+phong\s+toa', normalized))
+
     for kw in URGENT_TRANSFER_KEYWORDS:
+        if kw == "phong toa" and is_defensive_freeze:
+            continue
         if kw in normalized:
             return [
                 RuleMatch(
@@ -823,10 +828,16 @@ def check_suspicious_transfer_memo(text: str) -> list[RuleMatch]:
     has_bank = bool(re.search(bank_pattern, normalized))
 
     # 2. Nhận diện dãy số tài khoản / số điện thoại người nhận (8-16 chữ số)
-    has_account_number = bool(re.search(r'\b\d{8,16}\b', text))
+    # Loại trừ đầu số tổng đài dịch vụ 1800/1900 (tránh báo nhầm hotline thành số tài khoản)
+    account_candidates = [
+        num for num in re.findall(r'\b\d{8,16}\b', text)
+        if not num.startswith(('1800', '1900'))
+    ]
+    has_account_number = len(account_candidates) > 0
 
     # 3. Nhận diện cú pháp / nội dung chuyển khoản nghi vấn
-    memo_pattern = r'(?:xuat\s+kho|xuat\s+don|nap\s+tien|rut\s+tien|phi\s+ship|phi\s+ho\s+so|phi\s+xuat|coc\s+don|dat\s+coc|lam\s+nhiem\s+vu|nhiem\s+vu|hoa\s+hong|mo\s+khoa|\b\d+k\s+(?:xuat|nap|coc|don|phi)|\b\d+k\b.*?(?:xuat|kho|don|nap))'
+    # Loại trừ trường hợp rút tiền mặt tại ATM (giao dịch ATM thông thường)
+    memo_pattern = r'(?:xuat\s+kho|xuat\s+don|nap\s+tien|phi\s+ship|phi\s+ho\s+so|phi\s+xuat|coc\s+don|dat\s+coc|lam\s+nhiem\s+vu|nhiem\s+vu|hoa\s+hong|mo\s+khoa|\b\d+k\s+(?:xuat|nap|coc|don|phi)|\b\d+k\b.*?(?:xuat|kho|don|nap)|rut\s+tien\s+(?:ve\s+vi|treo|phi|nhanh))'
     has_suspicious_memo = bool(re.search(memo_pattern, normalized))
 
     if has_bank and has_account_number and has_suspicious_memo:

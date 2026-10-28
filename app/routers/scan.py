@@ -279,9 +279,26 @@ def scan_submit(
                     ai_result["status_label"] = "Cảnh báo nguy cơ lừa đảo (AI thẩm định)"
                     if gemini_consult.get("recommendation"):
                         ai_result["summary"] = gemini_consult["recommendation"]
-                elif score < 40 and not gemini_consult.get("is_scam"):
-                    ai_result["scam_prob"] = min(ai_result.get("scam_prob", 0.0), 5.0)
-                    ai_result["safe_prob"] = 100.0 - ai_result["scam_prob"]
+                elif not gemini_consult.get("is_scam"):
+                    has_hard_proof = any(
+                        getattr(m, 'rule_id', '') in {
+                            "blacklisted_domain", "blacklisted_phone", "brand_impersonation_url",
+                            "credential_spoofing_url", "app_install_apk", "dga_random_domain",
+                            "raw_ip_domain"
+                        }
+                        for m in matches
+                    )
+                    if not has_hard_proof:
+                        beta = 0.3
+                        score = int(round(beta * min(score, 15.0) + (1.0 - beta) * (100.0 - ai_conf)))
+                        score = min(score, 15)
+                        risk_level = RiskLevel.LOW
+                        ai_result["scam_prob"] = float(score)
+                        ai_result["safe_prob"] = 100.0 - float(score)
+                        ai_result["is_scam"] = False
+                        ai_result["status_label"] = "Nội dung an toàn (AI thẩm định)"
+                        if gemini_consult.get("recommendation"):
+                            ai_result["summary"] = gemini_consult["recommendation"]
         except Exception as e:
             logger.warning(f"Server-side AI consultation warning: {e}")
 
@@ -417,26 +434,44 @@ def api_gemini_consult(
     is_safe_service = guardrail.is_safe_service_bypass(content, has_threat_indicators=False, has_urls=bool(urls))
     is_provably_safe = (is_trusted_domain or is_official_hotline or is_bank_warning or is_safe_service)
 
-    if unified_eval["risk_level"] == RiskLevel.HIGH:
+    has_hard_threat = any(
+        getattr(m, 'rule_id', '') in {
+            "blacklisted_domain", "blacklisted_phone", "brand_impersonation_url",
+            "credential_spoofing_url", "app_install_apk", "dga_random_domain",
+            "raw_ip_domain"
+        }
+        for m in raw_matches
+    )
+
+    if has_hard_threat:
         raw_ai_result["is_scam"] = True
         raw_ai_result["risk_level"] = "HIGH"
-        if "chính thống" in raw_ai_result.get("category", "").lower() or "quảng cáo" in raw_ai_result.get("category", "").lower():
-            raw_ai_result["category"] = "Cảnh báo lừa đảo / Nguy cơ cao"
-            raw_ai_result["recommendation"] = "CẢNH BÁO NGUY HIỂM: Tuyệt đối không chuyển tiền, không cung cấp mã OTP hay bấm vào bất kỳ liên kết nào."
-    elif raw_ai_result.get("is_scam", False):
-        if is_provably_safe:
-            # Chỉ phủ quyết (override) kết quả của AI nếu có chứng cứ xác thực an toàn tuyệt đối
-            raw_ai_result["is_scam"] = False
-            raw_ai_result["risk_level"] = "LOW"
-            raw_ai_result["category"] = "Tin nhắn chính thống / An toàn"
-            raw_ai_result["confidence"] = 95.0
-        else:
-            # Tôn trọng cảnh báo của AI khi phát hiện dấu hiệu lừa đảo trong ngữ cảnh
-            raw_ai_result["is_scam"] = True
-            raw_ai_result["risk_level"] = "HIGH" if raw_ai_result.get("confidence", 0) >= 70 else "MEDIUM"
-            cat = raw_ai_result.get("category", "")
-            if not cat or "an toàn" in cat.lower() or "chính thống" in cat.lower():
-                raw_ai_result["category"] = "Cảnh báo dấu hiệu lừa đảo (AI thẩm định)"
+        raw_ai_result["category"] = "Cảnh báo lừa đảo / Nguy cơ cao"
+        raw_ai_result["recommendation"] = "CẢNH BÁO NGUY HIỂM: Tuyệt đối không chuyển tiền, không cung cấp mã OTP hay bấm vào bất kỳ liên kết nào."
+    elif not raw_ai_result.get("is_scam", False):
+        # AI xác nhận An toàn: Không bị ghi đè thành lừa đảo
+        raw_ai_result["is_scam"] = False
+        raw_ai_result["risk_level"] = "LOW"
+        cat = raw_ai_result.get("category", "")
+        if not cat or "lừa đảo" in cat.lower() or "nguy cơ" in cat.lower():
+            raw_ai_result["category"] = "Thông báo chính thống / Cảnh báo an toàn"
+        rec = raw_ai_result.get("recommendation", "")
+        if not rec or "nguy hiểm" in rec.lower():
+            raw_ai_result["recommendation"] = "Thông báo an toàn. Đây là tính năng cảnh báo bảo mật hoặc thông tin dịch vụ chính thống nhằm bảo vệ tài khoản của bạn."
+    elif is_provably_safe:
+        # Nếu AI báo lừa đảo nhưng thuộc vùng an toàn tuyệt đối (ví dụ tên miền .gov.vn, hotline đã xác minh)
+        raw_ai_result["is_scam"] = False
+        raw_ai_result["risk_level"] = "LOW"
+        raw_ai_result["category"] = "Tin nhắn chính thống / An toàn"
+        raw_ai_result["confidence"] = 95.0
+        raw_ai_result["recommendation"] = "Nội dung an toàn, thuộc tổ chức hoặc cổng dịch vụ chính thống."
+    else:
+        # Tôn trọng cảnh báo của AI khi phát hiện dấu hiệu lừa đảo trong ngữ cảnh
+        raw_ai_result["is_scam"] = True
+        raw_ai_result["risk_level"] = "HIGH" if raw_ai_result.get("confidence", 0) >= 70 else "MEDIUM"
+        cat = raw_ai_result.get("category", "")
+        if not cat or "an toàn" in cat.lower() or "chính thống" in cat.lower():
+            raw_ai_result["category"] = "Cảnh báo dấu hiệu lừa đảo (AI thẩm định)"
 
     return raw_ai_result
 

@@ -15,10 +15,16 @@ class ContextualGuardrail:
     def __init__(self):
         # Mẫu câu khuyến cáo bảo mật an toàn thường gặp trong tin nhắn chính thức của ngân hàng/ví điện tử
         self.bank_security_patterns = [
-            re.compile(r'(?:tuyet doi|khong|de phong)\s+(?:khong\s+)?(?:chia se|cung cap|nhap|gui|doc)\s+(?:ma\s+)?(?:otp|mat khau)', re.I),
-            re.compile(r'(?:se mat tien|neu cung cap|canh giac|can than)\s+.*(?:otp|mat khau)', re.I),
-            re.compile(r'(?:khong chia se|khong cung cap|khong doc)\s+(?:ma\s+)?(?:otp|xac thuc)\s+cho\s+(?:bat ky|ai)', re.I),
-            re.compile(r'neu\s+(?:quy khach|ban)\s+khong\s+thuc hien\s+vui long', re.I),
+            re.compile(r'(?:tuyet\s*doi|khong|de\s*phong)\s+(?:khong\s+)?(?:chia\s*se|cung\s*cap|nhap|gui|doc)\s+(?:ma\s+)?(?:otp|mat\s*khau)', re.I),
+            re.compile(r'(?:se\s*mat\s*tien|neu\s*cung\s*cap|canh\s*giac|can\s*than)\s+.*(?:otp|mat\s*khau)', re.I),
+            re.compile(r'(?:khong\s*chia\s*se|khong\s*cung\s*cap|khong\s*doc)\s+(?:ma\s+)?(?:otp|xac\s*thuc)\s+cho\s+(?:bat\s*ky|ai)', re.I),
+            re.compile(r'neu\s+(?:day\s+)?khong\s+phai\s+(?:la\s+)?(?:giao\s+dich|quy\s+khach|ban)', re.I),
+            re.compile(r'neu\s+(?:quy\s+khach|ban)?\s*khong\s+(?:thuc\s+hien|phai|yeu\s+cau)', re.I),
+            re.compile(r'(?:mo|vao|truy\s+cap)\s+(?:ngay\s+)?(?:ung\s+dung|app)\s+.*?khoa\s+the', re.I),
+            re.compile(r'(?:chon|thuc\s+hien)\s*[\'"]?khoa\s+(?:the|tai\s+khoan|dich\s+vu)', re.I),
+            re.compile(r'(?:khoa\s+the|khoa\s+tai\s+khoan|phong\s+toa\s+tai\s+khoan)\s+(?:khan\s+cap|tuc\s+thi)', re.I),
+            re.compile(r'phat\s+hien\s+giao\s+dich\s+nghi\s+van', re.I),
+            re.compile(r'canh\s+bao\s+(?:an\s+ninh|bao\s+mat|rui\s+ro)', re.I),
         ]
 
         # Từ khóa dịch vụ tiện ích, giao nhận thường ngày

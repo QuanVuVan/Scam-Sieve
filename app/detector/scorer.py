@@ -28,9 +28,12 @@ class RiskScorer:
             'tv360.vn', 'vtscloud.vn', 'viettelstore.vn',
             'mobifone.vn', 'mobifone.com.vn', 'vinaphone.vn', 'vinaphone.com.vn', 'vnpt.vn', 'vnptpay.vn', 'vnptmoney.vn', 'vietnamobile.com.vn',
             # Thương mại điện tử & Giao vận
-            'shopee.vn', 'lazada.vn', 'tiki.vn', 'sendo.vn', 'grab.com', 'be.com.vn', 'ahamove.com',
+            'shopee.vn', 'spx.vn', 'lazada.vn', 'tiki.vn', 'sendo.vn', 'grab.com', 'be.com.vn', 'ahamove.com',
             'thegioididong.com', 'dienmayxanh.com', 'fptshop.com.vn', 'cellphones.com.vn', 'hoanghamobile.com',
             'bachhoaxanh.com', 'ghn.vn', 'ghtk.vn', 'viettelpost.vn', 'vnpost.vn',
+            # Năng lượng & Hàng không
+            'evn.com.vn', 'evnhanoi.com.vn', 'evnhcm.com.vn', 'evncpc.vn', 'evnspc.vn', 'evnnpc.vn', 'cpc.vn',
+            'vietnamairlines.com', 'vietjetair.com', 'bambooairways.com',
             # Cổng an toàn thông tin & Cơ quan
             'tinnhiemmang.vn', 'chongluadao.vn', 'ncsc.gov.vn', 'dichvucong.gov.vn', 'vneid.gov.vn',
             'chinhphu.vn', 'baochinhphu.vn', 'bocongan.gov.vn',
@@ -371,7 +374,7 @@ class RiskScorer:
 
         has_threat = bool(
             re.search(
-                r'(?:doc|gui|cung cap|nhap|lay|xin)\s+(?:ma\s+)?otp|chuyen\s+(?:gap|tien|khoan)|phong toa|lenh bat|\.apk|tai\s+xiu|song\s+(?:bac|bai|tai\s+xiu)|ca\s+(?:cuoc|do)|no\s+hu|casino|baccarat',
+                r'(?:doc|gui|cung cap|nhap|lay|xin)\s+(?:ma\s+)?otp|(?:yeu\s+cau|bat|phai|can|de)\s+chuyen\s+(?:tien|khoan)|chuyen\s+(?:gap|tien\s+gap|khoan\s+gap|ngay)|(?:bi|se\s+bi|doa)\s+phong\s+toa|lenh bat|\.apk|tai\s+xiu|song\s+(?:bac|bai|tai\s+xiu)|ca\s+(?:cuoc|do)|no\s+hu|casino|baccarat',
                 threat_text,
             )
         ) or nlp_intent.get("is_credential_theft", False) or nlp_intent.get("is_coercive", False)
@@ -454,8 +457,13 @@ class RiskScorer:
         # 4. Thuật toán Hiệu chỉnh Điểm số Thống nhất (Harmonized Calibration)
         reasons = []
 
-        # TÌNH HUỐNG 1: Xác nhận An toàn qua Whitelist / Guardrail / Cảnh báo bảo mật
-        if is_safe_service or is_bank_warning or (is_trusted_domain and rule_score == 0 and not has_scam_indicator and scam_prob < 30.0):
+        is_pure_gov = bool(urls) and all(
+            (f.get("netloc", "").endswith(".gov.vn") or f.get("netloc", "") == "gov.vn")
+            for f in url_features_list
+        ) and not has_hard_critical and not has_threat
+
+        # TÌNH HUỐNG 1: Xác nhận An toàn qua Whitelist / Guardrail / Cảnh báo bảo mật / Cổng DVC Chính phủ
+        if is_safe_service or is_bank_warning or is_pure_gov or (is_trusted_domain and rule_score == 0 and not has_scam_indicator):
             matches = [m for m in matches if getattr(m, 'rule_id', '') in hard_critical_rule_ids]
             unified_score = 0
             risk_level = RiskLevel.LOW

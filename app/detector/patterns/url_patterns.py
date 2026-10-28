@@ -95,11 +95,15 @@ PROTECTED_BRANDS = {
     "tongcucthue": ["gdt.gov.vn", "thuedientu.gdt.gov.vn"],
     "tinnhiemmang": ["tinnhiemmang.vn"],
     "ncsc": ["ncsc.gov.vn"],
-    "evn": ["evn.com.vn"],
+    "evn": [
+        "evn.com.vn", "evnhanoi.com.vn", "evnhcm.com.vn",
+        "evncpc.vn", "evnspc.vn", "evnnpc.vn", "cpc.vn", "npc.com.vn"
+    ],
     "vnpost": ["vnpost.vn"],
 
     # 5. Thương mại điện tử & Dịch vụ số phổ biến
-    "shopee": ["shopee.vn"],
+    "shopee": ["shopee.vn", "spx.vn", "shopeepay.vn"],
+    "spx": ["spx.vn"],
     "lazada": ["lazada.vn"],
     "tiki": ["tiki.vn"],
     "sendo": ["sendo.vn"],
@@ -126,6 +130,10 @@ PROTECTED_BRANDS = {
     "fecredit": ["fecredit.com.vn"],
     "vietcom": ["vietcombank.com.vn"],
     "chiaki": ["chiaki.vn"],
+    # Hàng không & Vận tải hành khách
+    "vietnamairlines": ["vietnamairlines.com"],
+    "vietjet": ["vietjetair.com"],
+    "bambooairways": ["bambooairways.com"],
 }
 
 # Dịch vụ Tunneling / Lưu trữ ứng dụng tạm thời miễn phí thường bị lạm dụng
