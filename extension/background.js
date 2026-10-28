@@ -21,7 +21,8 @@ const TRUSTED_DOMAINS = [
   "sacombank.com.vn", "vib.com.vn", "vietinbank.vn", "hdbank.com.vn", "shb.com.vn",
   "shopee.vn", "lazada.vn", "tiki.vn", "sendo.vn", "thegioididong.com",
   "dienmayxanh.com", "fptshop.com.vn", "viettel.vn", "vinaphone.vn", "mobifone.vn",
-  "vnptmoney.vn", "tv360.vn", "viettelstore.vn", "homecredit.vn", "vtmoney.vn"
+  "vnptmoney.vn", "tv360.vn", "viettelstore.vn", "homecredit.vn", "vtmoney.vn",
+  "p-sieve.onrender.com", "scam-sieve.onrender.com", "psieve.onrender.com", "localhost", "127.0.0.1"
 ];
 
 // Danh ba tinh bao ten mien doc hai / bi chiem quyen dieu khien

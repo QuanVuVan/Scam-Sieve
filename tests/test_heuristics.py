@@ -16,6 +16,14 @@ class TestHeuristicsEngine:
         assert res["total_criteria"] == 21
         assert res["fail_count"] == 0
 
+    def test_psieve_system_domain_exception(self):
+        for domain in ["https://p-sieve.onrender.com", "https://scam-sieve.onrender.com"]:
+            res = evaluate_heuristics(domain)
+            assert res["safety_score"] == 100, f"Expected 100 for {domain}, got {res['safety_score']}"
+            assert res["verdict"] == "SAFE"
+            assert res["is_trusted"] is True
+            assert res["fail_count"] == 0
+
     def test_phishing_domain_fails_brand_and_criteria(self):
         res = evaluate_heuristics(
             "http://vietcombank-login-update.top/ebank/smartotp",

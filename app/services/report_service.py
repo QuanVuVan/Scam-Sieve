@@ -65,6 +65,32 @@ def verify_report_threat_instantly(
     full_context = f"{clean_content} {scam_type or ''} {clean_note}".strip()
     normalized = _normalize_content_for_lookup(clean_content, content_type) or clean_content
 
+    # 0. Kiểm tra Vùng an toàn & Hệ sinh thái P-Sieve chính thức (Ngoại lệ an toàn)
+    from app.detector.scorer import scorer
+    url_target_cand = clean_content.lower()
+    if not url_target_cand.startswith(("http://", "https://")):
+        url_target_cand_full = "http://" + url_target_cand
+    else:
+        url_target_cand_full = url_target_cand
+    try:
+        import urllib.parse
+        target_host = (urllib.parse.urlparse(url_target_cand_full).hostname or "").lower()
+    except Exception:
+        target_host = url_target_cand
+
+    is_gov_or_edu = target_host.endswith(".gov.vn") or target_host.endswith(".edu.vn") or target_host in ("gov.vn", "edu.vn")
+    is_trusted = is_gov_or_edu or any(target_host == d or target_host.endswith("." + d) for d in scorer.TRUSTED_DOMAINS)
+    if is_trusted:
+        return {
+            "verdict": "SAFE",
+            "is_verified": False,
+            "confidence": 0.99,
+            "confidence_pct": 99,
+            "reason": f"Tên miền '{target_host}' thuộc danh bạ tổ chức chính thống / hệ thống P-Sieve được bảo hộ an ninh.",
+            "scam_category": "Tổ chức chính thống / Hệ thống an toàn",
+            "action": "whitelist_protected",
+        }
+
     # 1. Kiểm tra đối soát với Danh sách đen Blacklist
     if db:
         existing_bl = db.query(Blacklist).filter(Blacklist.value == normalized).first()

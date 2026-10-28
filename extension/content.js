@@ -32,7 +32,8 @@
     // Ngân hàng & Ví điện tử Việt Nam
     "vietcombank.com.vn", "techcombank.com.vn", "mbbank.com.vn", "bidv.com.vn", "agribank.com.vn", "vpbank.com.vn", "acb.com.vn", "tpbank.com.vn", "sacombank.com.vn", "vib.com.vn", "vietinbank.vn", "hdbank.com.vn", "shb.com.vn", "momo.vn", "zalopay.vn", "vnpay.vn", "zalo.me",
     // Bán lẻ & Viễn thông
-    "thegioididong.com", "dienmayxanh.com", "fptshop.com.vn", "cellphones.com.vn", "hoanghamobile.com", "bachhoaxanh.com", "shopee.vn", "lazada.vn", "tiki.vn", "sendo.vn", "viettel.vn", "vinaphone.vn", "mobifone.vn"
+    "thegioididong.com", "dienmayxanh.com", "fptshop.com.vn", "cellphones.com.vn", "hoanghamobile.com", "bachhoaxanh.com", "shopee.vn", "lazada.vn", "tiki.vn", "sendo.vn", "viettel.vn", "vinaphone.vn", "mobifone.vn",
+    "p-sieve.onrender.com", "scam-sieve.onrender.com", "psieve.onrender.com", "localhost", "127.0.0.1"
   ];
 
   const isTrustedSite = !isTestingPage && (

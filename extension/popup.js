@@ -14,7 +14,8 @@ const TRUSTED_DOMAINS = [
   "vnexpress.net", "dantri.com.vn", "tuoitre.vn", "thanhnien.vn", "vietnamnet.vn", "vtv.vn", "tienphong.vn", "laodong.vn",
   "google.com", "google.com.vn", "youtube.com", "facebook.com", "fb.com", "messenger.com", "zalo.me",
   "vietcombank.com.vn", "techcombank.com.vn", "mbbank.com.vn", "bidv.com.vn", "agribank.com.vn", "vpbank.com.vn", "acb.com.vn", "tpbank.com.vn", "sacombank.com.vn", "vib.com.vn", "vietinbank.vn",
-  "shopee.vn", "lazada.vn", "tiki.vn", "sendo.vn", "thegioididong.com", "fptshop.com.vn", "viettel.vn", "vinaphone.vn", "mobifone.vn"
+  "shopee.vn", "lazada.vn", "tiki.vn", "sendo.vn", "thegioididong.com", "fptshop.com.vn", "viettel.vn", "vinaphone.vn", "mobifone.vn",
+  "p-sieve.onrender.com", "scam-sieve.onrender.com", "psieve.onrender.com", "localhost", "127.0.0.1"
 ];
 
 const URL_SHORTENERS = [

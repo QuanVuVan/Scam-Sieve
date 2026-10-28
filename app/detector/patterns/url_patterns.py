@@ -124,7 +124,18 @@ PROTECTED_BRANDS = {
     "claude": ["claude.ai", "claude.com", "anthropic.com"],
     "anthropic": ["anthropic.com", "claude.ai", "claude.com"],
     "garena": ["garena.vn"],
-    "p-sieve": ["127.0.0.1", "localhost"],
+    "p-sieve": [
+        "p-sieve.onrender.com", "scam-sieve.onrender.com", "psieve.onrender.com",
+        "127.0.0.1", "localhost"
+    ],
+    "scam-sieve": [
+        "scam-sieve.onrender.com", "p-sieve.onrender.com", "psieve.onrender.com",
+        "127.0.0.1", "localhost"
+    ],
+    "psieve": [
+        "p-sieve.onrender.com", "scam-sieve.onrender.com", "psieve.onrender.com",
+        "127.0.0.1", "localhost"
+    ],
     # Tài chính tiêu dùng & Đối tác định danh
     "homecredit": ["homecredit.vn", "hcvn.app"],
     "fecredit": ["fecredit.com.vn"],

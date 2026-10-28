@@ -53,7 +53,7 @@ class RiskScorer:
             # Nền tảng tiếp thị & Chuyển hướng an toàn
             'onelink.me', 'go.link', 'goo.gl', 'garena.vn', 'ezviz.com',
             # Môi trường nội bộ
-            'localhost', '127.0.0.1'
+            'p-sieve.onrender.com', 'scam-sieve.onrender.com', 'psieve.onrender.com', 'localhost', '127.0.0.1'
         ]
 
         self.ml_model = None

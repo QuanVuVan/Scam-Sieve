@@ -26,7 +26,7 @@ class ThreatIntelligenceService:
         core_safe_domains = {
             "google.com", "apple.com", "microsoft.com", 
             "shopee.vn", "tiki.vn", "lazada.vn",
-            "vietcombank.com.vn", "bidv.com.vn", "techcombank.com.vn"
+            "vietcombank.com.vn", "bidv.com.vn", "techcombank.com.vn", "p-sieve.onrender.com", "scam-sieve.onrender.com", "psieve.onrender.com", "localhost", "127.0.0.1"
         }
         self._whitelist_domains.update(core_safe_domains)
 
