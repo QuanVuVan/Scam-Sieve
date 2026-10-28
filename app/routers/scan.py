@@ -276,7 +276,7 @@ def scan_submit(
                         risk_level = RiskLevel.MEDIUM
                     ai_result["scam_prob"] = float(score)
                     ai_result["is_scam"] = True
-                    ai_result["status_label"] = "Cảnh báo nguy cơ lừa đảo (AI thẩm định)"
+                    ai_result["status_label"] = "Cảnh báo nguy cơ lừa đảo"
                     if gemini_consult.get("recommendation"):
                         ai_result["summary"] = gemini_consult["recommendation"]
                 elif not gemini_consult.get("is_scam"):
@@ -296,7 +296,7 @@ def scan_submit(
                         ai_result["scam_prob"] = float(score)
                         ai_result["safe_prob"] = 100.0 - float(score)
                         ai_result["is_scam"] = False
-                        ai_result["status_label"] = "Nội dung an toàn (AI thẩm định)"
+                        ai_result["status_label"] = "Nội dung an toàn"
                         if gemini_consult.get("recommendation"):
                             ai_result["summary"] = gemini_consult["recommendation"]
         except Exception as e:
@@ -471,7 +471,7 @@ def api_gemini_consult(
         raw_ai_result["risk_level"] = "HIGH" if raw_ai_result.get("confidence", 0) >= 70 else "MEDIUM"
         cat = raw_ai_result.get("category", "")
         if not cat or "an toàn" in cat.lower() or "chính thống" in cat.lower():
-            raw_ai_result["category"] = "Cảnh báo dấu hiệu lừa đảo (AI thẩm định)"
+            raw_ai_result["category"] = "Cảnh báo dấu hiệu lừa đảo"
 
     return raw_ai_result
 

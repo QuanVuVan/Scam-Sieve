@@ -338,7 +338,7 @@
                                 staticCard.classList.remove('risk-low', 'risk-medium');
                                 staticCard.classList.add('risk-high');
                                 const heading = staticCard.querySelector('.risk-status-heading');
-                                if (heading) heading.innerText = 'Cảnh báo nguy cơ lừa đảo (AI thẩm định)';
+                                if (heading) heading.innerText = 'Cảnh báo nguy cơ lừa đảo';
                                 const advice = staticCard.querySelector('.risk-card-desc p');
                                 if (advice && data.recommendation) advice.innerText = data.recommendation;
                             }
@@ -347,7 +347,7 @@
                                 dynamicCard.classList.remove('risk-low', 'risk-medium');
                                 dynamicCard.classList.add('risk-high');
                                 const dynHeading = dynamicCard.querySelector('.risk-status-heading');
-                                if (dynHeading) dynHeading.innerText = 'Phát hiện kịch bản lừa đảo (AI thẩm định)';
+                                if (dynHeading) dynHeading.innerText = 'Phát hiện kịch bản lừa đảo';
                                 const dynDesc = dynamicCard.querySelector('.risk-card-desc p');
                                 if (dynDesc) dynDesc.innerText = 'Mô hình AI phát hiện liên kết / kịch bản mang nguy cơ lừa đảo cao.';
                             }
