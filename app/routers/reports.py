@@ -3,8 +3,7 @@ Router Báo cáo và Đóng góp Dữ liệu An ninh Cộng đồng (Crowdsourci
 """
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, Form, Request, UploadFile, File, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -254,42 +253,4 @@ def api_get_community_stats(query: str = "", db: Session = Depends(get_db)):
     """
     return get_community_stats(query, db)
 
-
-@router.get("/api/admin/download-db")
-def download_database():
-    """
-    Tải bản sao lưu cơ sở dữ liệu SQLite mới nhất từ máy chủ về máy tính cá nhân.
-    """
-    import os
-    from app.config import settings
-
-    # Tìm đường dẫn file SQLite thực tế
-    db_candidates = [
-        "scamsieve.db",
-        os.path.join(os.getcwd(), "scamsieve.db"),
-    ]
-
-    if settings.DATABASE_URL.startswith("sqlite:///"):
-        clean_path = settings.DATABASE_URL.replace("sqlite:///", "").lstrip("./")
-        db_candidates.insert(0, clean_path)
-        db_candidates.insert(0, os.path.abspath(clean_path))
-
-    target_path = None
-    for path in db_candidates:
-        if os.path.exists(path) and os.path.isfile(path):
-            target_path = path
-            break
-
-    if not target_path:
-        raise HTTPException(
-            status_code=404,
-            detail="File cơ sở dữ liệu SQLite chưa được khởi tạo trên máy chủ."
-        )
-
-    return FileResponse(
-        path=target_path,
-        filename="scamsieve.db",
-        media_type="application/x-sqlite3",
-        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
-    )
 
