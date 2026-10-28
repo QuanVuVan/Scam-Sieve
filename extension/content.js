@@ -389,6 +389,9 @@
 
         if (sensitiveType) {
           showSensitiveShieldBanner(sensitiveType);
+          try {
+            chrome.runtime.sendMessage({ action: "update_badge", verdict: "WARN" });
+          } catch (e) {}
         }
       }
 

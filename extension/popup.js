@@ -33,7 +33,8 @@ const KNOWN_MALICIOUS_DOMAINS = [
   "vcb-digibank-login.xyz",
   "vietcornbank-ebank.xyz",
   "quatang-triandacbiet.xyz",
-  "vieclam-tainha.site"
+  "vieclam-tainha.site",
+  "1wyjiv.life"
 ];
 
 let activeOrigin = "https://p-sieve.onrender.com";
@@ -373,13 +374,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // 19. Từ khóa lừa đảo
-    const scamWords = ["smartotp", "nhanqua", "quaythuong", "gamebai", "taixiu", "sunwin", "go88"];
+    const scamWords = ["smartotp", "nhanqua", "quaythuong", "gamebai", "taixiu", "sunwin", "go88", "hitclub", "b52", "rikvip"];
     const hasScamWord = scamWords.some(w => host.includes(w));
     if (hasScamWord && !isTrusted) {
       criteria.push({ name: "Từ khóa lừa đảo", status: "FAIL", detail: "Chứa từ khóa lừa đảo, cờ bạc lậu hoặc bẫy nạp tiền." });
       penalty += 50;
     } else {
       criteria.push({ name: "Từ khóa lừa đảo", status: "PASS", detail: "Không chứa từ khóa mồi chài lừa đảo." });
+    }
+
+    // 19b. Nền tảng cá cược / cờ bạc chưa cấp phép (Dấu hiệu khả nghi - WARN)
+    const bettingWords = ["bet", "cacuoc", "keonhacai", "soikeo", "bong88", "w88", "fun88", "m88", "fb88", "bk8", "dafabet", "188bet", "bet365", "ggbet", "1win", "casino"];
+    const tld = host.split(".").pop();
+    if ((tld === "bet" || bettingWords.some(w => host.includes(w))) && !isTrusted) {
+      criteria.push({
+        name: "Cờ bạc / Cá cược khả nghi",
+        status: "WARN",
+        detail: "Trang web liên quan đến dịch vụ cá cược trực tuyến hoặc cổng cờ bạc chưa được cấp phép tại Việt Nam."
+      });
+      penalty += 25;
+    } else {
+      criteria.push({
+        name: "Cờ bạc / Cá cược khả nghi",
+        status: "PASS",
+        detail: "Không có dấu hiệu liên quan đến cá cược, cờ bạc trực tuyến."
+      });
     }
 
     // 20. Bẫy trộm OTP
@@ -422,6 +441,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
   }
 
+  function syncToolbarBadge(verdict, isTrusted) {
+    try {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (!tabs || !tabs[0] || !tabs[0].id) return;
+        const tabId = tabs[0].id;
+        let badgeText = "";
+        let badgeColor = "#16a34a";
+        if (isTrusted) {
+          badgeText = "SAFE";
+          badgeColor = "#16a34a";
+        } else if (verdict === "DANGEROUS") {
+          badgeText = "DANGER";
+          badgeColor = "#aa0a27";
+        } else if (verdict === "SUSPICIOUS" || verdict === "WARN") {
+          badgeText = "WARN";
+          badgeColor = "#d97706";
+        } else {
+          badgeText = "";
+        }
+        chrome.action.setBadgeText({ tabId, text: badgeText });
+        if (badgeText) {
+          chrome.action.setBadgeBackgroundColor({ tabId, color: badgeColor });
+        }
+        chrome.runtime.sendMessage({
+          action: "update_badge",
+          tabId: tabId,
+          verdict: isTrusted ? "SAFE" : verdict
+        });
+      });
+    } catch (e) {}
+  }
+
   // 5. Hàm chạy kiểm tra trang web toàn diện
   async function inspectCurrentSite() {
     if (!currentTabUrl || currentTabUrl.startsWith("chrome://") || currentTabUrl.startsWith("edge://") || currentTabUrl.startsWith("about:")) {
@@ -430,6 +481,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       renderCriteriaBadges([]);
       return;
     }
+
+    const isGovEdu = currentTabHost.endsWith(".gov.vn") || currentTabHost.endsWith(".edu.vn");
+    const isTrustedSite = isGovEdu || TRUSTED_DOMAINS.some(d => currentTabHost === d || currentTabHost.endsWith("." + d));
 
     benchmarkPill.textContent = "Đang đo kiểm tốc độ...";
 
@@ -465,6 +519,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       updateGauge(data.safety_score, data.verdict_text, data.verdict);
       benchmarkPill.textContent = `Tốc độ phản hồi: ${totalTime}ms`;
       renderCriteriaBadges(data.criteria || []);
+      syncToolbarBadge(data.verdict, data.is_trusted || isTrustedSite);
 
     } catch (err) {
       // 5.3. Kích hoạt động cơ phân tích ngoại tuyến tức thì nếu backend bận
@@ -472,6 +527,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       updateGauge(offlineResult.score, offlineResult.verdict_text, offlineResult.verdict);
       benchmarkPill.textContent = `Tốc độ: ${offlineResult.benchmark}`;
       renderCriteriaBadges(offlineResult.criteria);
+      syncToolbarBadge(offlineResult.verdict, isTrustedSite);
     }
   }
 

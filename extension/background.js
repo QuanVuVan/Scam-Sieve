@@ -35,7 +35,8 @@ const KNOWN_MALICIOUS_DOMAINS = [
   "vcb-digibank-login.xyz",
   "vietcornbank-ebank.xyz",
   "quatang-triandacbiet.xyz",
-  "vieclam-tainha.site"
+  "vieclam-tainha.site",
+  "1wyjiv.life"
 ];
 
 // Bo nho dem ket qua giam dinh URL nham toi uu toc do (< 0.1ms)
@@ -123,6 +124,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 // 3. Ham cap nhat Huy hieu tren thanh cong cu (Extension Badge)
+// Ho tro day du bo 3 chuan an ninh quoc te: SAFE (Xanh) | WARN (Cam) | DANGER (Do)
 async function updateTabBadge(tabId, url) {
   if (!url || url.startsWith("chrome://") || url.startsWith("edge://") || url.startsWith("about:")) {
     chrome.action.setBadgeText({ tabId, text: "" });
@@ -138,52 +140,68 @@ async function updateTabBadge(tabId, url) {
     if (isGovEdu || TRUSTED_DOMAINS.some(d => host === d || host.endsWith("." + d))) {
       chrome.action.setBadgeText({ tabId, text: "SAFE" });
       chrome.action.setBadgeBackgroundColor({ tabId, color: "#16a34a" });
+      URL_VERDICT_CACHE.set(url, { score: 0, is_scam: false, verdict: "SAFE" });
       return;
     }
 
-    // 2. Kiem tra nhanh cac duoi ten mien nguy co cao hoac tu khoa co bac / lua dao (0ms cuc bo)
-    const suspiciousTlds = [
+    // 2. Kiem tra nhanh cac duoi ten mien nguy co cao hoac tu khoa lua dao nguy hiem (DANGER)
+    const dangerousTlds = [
       "life", "xyz", "top", "vip", "work", "click", "buzz", "club", "cam",
       "fit", "rest", "icu", "sbs", "cfd", "space", "link", "monster", "tk", "ml", "ga",
-      "bid", "bond", "cyou", "download", "stream", "live"
+      "bid", "bond", "cyou", "download", "stream"
     ];
-    const gamblingKeywords = ["1win", "sunwin", "go88", "taixiu", "gamebai", "hitclub", "b52", "rikvip", "kubet", "thabet", "casino"];
+    const dangerousKeywords = ["1win", "sunwin", "go88", "taixiu", "hitclub", "b52", "rikvip", "smartotp", "nhanqua", "quaythuong"];
     const tld = host.split(".").pop();
     const isKnownMalicious = KNOWN_MALICIOUS_DOMAINS.some(d => host === d || host.endsWith("." + d));
 
-    if (isKnownMalicious || suspiciousTlds.includes(tld) || gamblingKeywords.some(kw => host.includes(kw))) {
+    if (isKnownMalicious || dangerousTlds.includes(tld) || dangerousKeywords.some(kw => host.includes(kw))) {
       chrome.action.setBadgeText({ tabId, text: "DANGER" });
       chrome.action.setBadgeBackgroundColor({ tabId, color: "#aa0a27" });
-      URL_VERDICT_CACHE.set(url, { score: 100, is_scam: true });
+      URL_VERDICT_CACHE.set(url, { score: 100, is_scam: true, verdict: "DANGEROUS" });
       return;
+    }
+
+    // 2b. Kiem tra nhanh dau hieu kha nghi cuc bo (WARN: bet, cacuoc, keonhacai, casino...)
+    const suspiciousKeywords = ["bet", "cacuoc", "keonhacai", "soikeo", "bong88", "w88", "fun88", "m88", "fb88", "bk8", "dafabet", "casino", "gamebai"];
+    if (tld === "bet" || suspiciousKeywords.some(kw => host.includes(kw))) {
+      chrome.action.setBadgeText({ tabId, text: "WARN" });
+      chrome.action.setBadgeBackgroundColor({ tabId, color: "#d97706" });
+      URL_VERDICT_CACHE.set(url, { score: 45, is_scam: false, verdict: "SUSPICIOUS" });
     }
 
     // 3. Kiem tra bo nho dem (0.01ms)
     if (URL_VERDICT_CACHE.has(url)) {
       const cached = URL_VERDICT_CACHE.get(url);
-      applyBadge(tabId, cached.score, cached.is_scam);
+      applyBadge(tabId, cached.score, cached.is_scam, cached.verdict);
       return;
     }
 
-    // 4. Kiem tra qua backend API
+    // 4. Kiem tra qua backend API P-Sieve
     const res = await fetchApi("/inspect-heuristics", { url, dom: {} }, "POST");
-    const isScam = res.verdict === "DANGEROUS" || (res.safety_score !== undefined && res.safety_score <= 35);
+    const isScam = res.verdict === "DANGEROUS" || (res.safety_score !== undefined && res.safety_score < 50);
+    const isSusp = res.verdict === "SUSPICIOUS" || (res.safety_score !== undefined && res.safety_score >= 50 && res.safety_score < 80);
     const score = Math.max(0, 100 - (res.safety_score ?? 100));
-    URL_VERDICT_CACHE.set(url, { score, is_scam: isScam });
-    applyBadge(tabId, score, isScam);
+    const v = isScam ? "DANGEROUS" : (isSusp ? "SUSPICIOUS" : (res.is_trusted ? "SAFE" : "UNKNOWN"));
+    URL_VERDICT_CACHE.set(url, { score, is_scam: isScam, verdict: v });
+    applyBadge(tabId, score, isScam, v);
   } catch (e) {
-    // Khong tu dong gan SAFE cho cac trang la khi mang loi
-    chrome.action.setBadgeText({ tabId, text: "" });
+    // Neu trang web da duoc phat hien co dau hieu kha nghi hay doc hai tu cuc bo thi giu nguyen
+    if (!URL_VERDICT_CACHE.has(url)) {
+      chrome.action.setBadgeText({ tabId, text: "" });
+    }
   }
 }
 
-function applyBadge(tabId, score, isScam) {
-  if (isScam || score >= 60) {
+function applyBadge(tabId, score, isScam, verdict = null) {
+  if (isScam || verdict === "DANGEROUS" || score >= 60) {
     chrome.action.setBadgeText({ tabId, text: "DANGER" });
     chrome.action.setBadgeBackgroundColor({ tabId, color: "#aa0a27" });
-  } else if (score >= 35) {
+  } else if (verdict === "SUSPICIOUS" || verdict === "WARN" || (score >= 20 && score < 60)) {
     chrome.action.setBadgeText({ tabId, text: "WARN" });
     chrome.action.setBadgeBackgroundColor({ tabId, color: "#d97706" });
+  } else if (verdict === "SAFE") {
+    chrome.action.setBadgeText({ tabId, text: "SAFE" });
+    chrome.action.setBadgeBackgroundColor({ tabId, color: "#16a34a" });
   } else {
     // Tuyet doi khong tu y hien thi SAFE tren thanh cong cu cho cac web la chua kiem chung!
     chrome.action.setBadgeText({ tabId, text: "" });
@@ -230,12 +248,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.action === "update_badge") {
+    const tabId = (sender && sender.tab && sender.tab.id) || request.tabId;
+    if (tabId) {
+      applyBadge(tabId, request.score || 0, request.is_scam || false, request.verdict);
+    }
+    sendResponse({ success: true });
+    return true;
+  }
+
   if (request.action === "inspect_page") {
     fetchApi("/inspect-page", request.payload, "POST")
       .then((data) => {
         if (sender && sender.tab && sender.tab.id && request.payload && request.payload.url) {
-          URL_VERDICT_CACHE.set(request.payload.url, { score: data.score, is_scam: data.is_scam });
-          applyBadge(sender.tab.id, data.score, data.is_scam);
+          const isScam = data.is_scam || (data.score >= 60);
+          const isSusp = !isScam && (data.score >= 20 || data.risk_level === "MEDIUM");
+          const v = isScam ? "DANGEROUS" : (isSusp ? "SUSPICIOUS" : "SAFE");
+          URL_VERDICT_CACHE.set(request.payload.url, { score: data.score, is_scam: isScam, verdict: v });
+          applyBadge(sender.tab.id, data.score, isScam, v);
         }
         sendResponse({ success: true, data });
       })

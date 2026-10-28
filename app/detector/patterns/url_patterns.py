@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 SUSPICIOUS_TLDS = {
     "top", "xyz", "club", "vip", "cfd", "sbs", "icu", "buzz", "monster", "cc",
     "cam", "fit", "cyou", "bond", "lat", "bid", "gq", "ml", "cf", "tk", "ga",
-    "rest", "work", "space", "click", "link", "live", "life", "stream", "download"
+    "rest", "work", "space", "click", "link", "live", "life", "stream", "download",
+    "bet"
 }
 
 # Từ khóa nghiệp vụ bẫy lừa đảo thường bị ghép với thương hiệu (Combosquatting)
@@ -31,7 +32,8 @@ PHISHING_DOMAIN_KEYWORDS = {
     "trian", "tangqua", "khuyenmai", "sukien", "traothuong", "gamebai", "kiemtien",
     "vaynhanh", "vaytien", "taiapp", "caiapp", "xacthuc", "smartotp", "ebank",
     "taixiu", "songbac", "cacuoc", "nohu", "xocdia", "casino", "baccarat",
-    "qbet", "sunwin", "go88", "kubet", "thabet", "shbet", "jun88", "new88", "hi88", "f8bet"
+    "qbet", "sunwin", "go88", "kubet", "thabet", "shbet", "jun88", "new88", "hi88", "f8bet",
+    "1win", "ggbet", "188bet", "w88", "fun88", "m88", "fb88", "bk8", "dafabet", "bet365", "bong88", "keonhacai"
 }
 
 # Danh bạ các thương hiệu, ngân hàng và cơ quan chính thống tại Việt Nam cần bảo vệ
@@ -248,6 +250,11 @@ def check_dga_domain(netloc: str) -> Dict[str, Any]:
     if digit_ratio >= 0.4 and entropy >= 2.5:
         is_dga = True
         reasons.append(f"Tỷ lệ số xen kẽ cao bất thường ({digit_ratio*100:.1f}%)")
+
+    # Tiêu chí 4: Tiền tố số ghép chuỗi ký tự ngẫu nhiên hoặc DGA (vd: 1wyjiv, 1win...)
+    if re.search(r'^\d+[bcdfghjklmnpqrstvwxyz]{2,}', core) and entropy >= 2.2:
+        is_dga = True
+        reasons.append("Tiền tố số ghép chuỗi phụ âm sinh ngẫu nhiên DGA")
 
     return {
         "is_dga": is_dga,

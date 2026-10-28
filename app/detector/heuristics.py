@@ -612,7 +612,14 @@ def evaluate_heuristics(
             from app.detector.rules import detect_all
             raw_m = detect_all(clean_url)
             eval_res = scorer.evaluate_unified_risk(clean_url, raw_m)
-            if eval_res.get("risk_level") == RiskLevel.HIGH or eval_res.get("score", 0) >= 70:
+            critical_threat_detected = any(
+                getattr(m, 'rule_id', '') in {
+                    'blacklisted_domain', 'brand_impersonation_url', 'credential_spoofing_url',
+                    'malware_apk_link', 'reverse_otp_scam', 'otp_share_request', 'dga_random_domain'
+                }
+                for m in raw_m
+            )
+            if critical_threat_detected or (eval_res.get("risk_level") == RiskLevel.HIGH and eval_res.get("score", 0) >= 85):
                 in_blacklist = True
                 reasons_str = eval_res.get("reasons", ["Mô hình AI phát hiện dấu hiệu lừa đảo"])[0]
                 blacklist_detail = f"Mô hình AI & Tình báo P-Sieve phát hiện liên kết mang nguy cơ lừa đảo cao ({eval_res.get('score')}%) - {reasons_str}."
