@@ -1,3 +1,4 @@
+import asyncio
 # File: app/routers/api_v1.py
 """
 RESTful API V1 dành cho Client mở rộng:
@@ -166,7 +167,7 @@ async def api_v1_scan_image(
         raise HTTPException(status_code=400, detail="Tệp hình ảnh không hợp lệ hoặc rỗng.")
 
     mime_type = image.content_type or "image/jpeg"
-    vision_result = gemini_service.analyze_image(image_bytes, mime_type)
+    vision_result = await asyncio.to_thread(gemini_service.analyze_image, image_bytes, mime_type)
 
     extracted_text = vision_result.get("extracted_text", "").strip()
     extracted_phone = vision_result.get("extracted_phone", "").strip()

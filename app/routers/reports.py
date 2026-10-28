@@ -1,3 +1,4 @@
+import asyncio
 """
 Router Báo cáo và Đóng góp Dữ liệu An ninh Cộng đồng (Crowdsourcing Reports).
 """
@@ -79,7 +80,7 @@ async def report_submit(
             image_bytes = await image.read()
             if image_bytes and len(image_bytes) > 0:
                 mime_type = image.content_type or "image/jpeg"
-                vision_result = gemini_service.analyze_image(image_bytes, mime_type)
+                vision_result = await asyncio.to_thread(gemini_service.analyze_image, image_bytes, mime_type)
                 if vision_result and not vision_result.get("error"):
                     extracted_text = vision_result.get("extracted_text", "").strip()
                     extracted_phone = vision_result.get("extracted_phone", "").strip()

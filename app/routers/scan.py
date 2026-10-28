@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 import re
+import asyncio
 
 import logging
 from app.database import get_db
@@ -487,7 +488,7 @@ async def api_ocr_extract(image: UploadFile = File(...)):
         return {"success": False, "error": "Tệp hình ảnh không hợp lệ hoặc rỗng."}
 
     mime_type = image.content_type or "image/jpeg"
-    vision_result = gemini_service.analyze_image(image_bytes, mime_type)
+    vision_result = await asyncio.to_thread(gemini_service.analyze_image, image_bytes, mime_type)
 
     if not vision_result or vision_result.get("error"):
         err_msg = vision_result.get("error", "Không thể trích xuất chữ từ hình ảnh.") if vision_result else "Lỗi xử lý ảnh."
@@ -536,7 +537,7 @@ async def handle_scan_image(
     b64_preview = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
 
     # Gọi Gemini Multimodal Vision
-    vision_result = gemini_service.analyze_image(image_bytes, mime_type)
+    vision_result = await asyncio.to_thread(gemini_service.analyze_image, image_bytes, mime_type)
 
     matches: list[RuleMatch] = []
     extracted_text = vision_result.get("extracted_text", "")

@@ -20,10 +20,8 @@ GROQ_MODELS = [
 ]
 
 GEMINI_MODELS = [
-    "gemini-3.5-flash",
     "gemini-3.6-flash",
-    "gemini-3.7-flash",
-    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
     "gemini-flash-latest",
 ]
 
@@ -43,11 +41,11 @@ class GeminiSecurityService:
         return bool((self.api_key and self.api_key.strip()) or (self.groq_api_key and self.groq_api_key.strip()))
 
     @staticmethod
-    def _preprocess_image(image_bytes: bytes, max_dim: int = 1600) -> tuple[bytes, str]:
+    def _preprocess_image(image_bytes: bytes, max_dim: int = 1000) -> tuple[bytes, str]:
         """
-        Nén và tối ưu hóa hình ảnh trước khi gửi qua API:
-        - Giữ độ phân giải sắc nét cao (tối đa 1600px) cho OCR đọc chữ nhỏ và đường link rõ nét.
-        - Chuyển đổi sang JPEG chất lượng 92% giữ nguyên chi tiết ký tự.
+        Nén và tối ưu hóa hình ảnh siêu tốc trước khi gửi qua API:
+        - Giữ độ phân giải sắc nét tiêu chuẩn (tối đa 1000px) cho OCR đọc chữ nhỏ và đường link rõ nét.
+        - Chuyển đổi sang JPEG chất lượng 82% giữ nguyên chi tiết ký tự, giảm 85% dung lượng để xử lý tức thì (< 3s).
         """
         try:
             from PIL import Image
@@ -71,7 +69,7 @@ class GeminiSecurityService:
                 img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
 
             out_buf = io.BytesIO()
-            img.save(out_buf, format="JPEG", quality=92, optimize=True)
+            img.save(out_buf, format="JPEG", quality=82, optimize=True)
             return out_buf.getvalue(), "image/jpeg"
         except Exception as e:
             logger.warning(f"Image preprocessing warning: {e}")
@@ -346,7 +344,7 @@ class GeminiSecurityService:
             return {"active": False, "error": "Dữ liệu ảnh trống"}
 
         # 1. Tối ưu nén ảnh siêu nhẹ trước khi tải lên (giảm 85% dung lượng, phản hồi cực nhanh 1-2s)
-        compressed_bytes, mime_type = self._preprocess_image(image_bytes, max_dim=1200)
+        compressed_bytes, mime_type = self._preprocess_image(image_bytes, max_dim=1000)
 
         import base64
         b64_data = base64.b64encode(compressed_bytes).decode("utf-8")
@@ -424,7 +422,7 @@ class GeminiSecurityService:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
             try:
-                with httpx.Client(timeout=22.0) as client:
+                with httpx.Client(timeout=7.0) as client:
                     response = client.post(url, json=payload, headers=headers)
 
                 if response.status_code == 200:

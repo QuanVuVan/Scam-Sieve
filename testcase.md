@@ -6,10 +6,9 @@ GIẢM 300K (trừ vào cước sử dụng) khi đăng ký lắp đặt Interne
 Đăng ký ngay tại https://viettel.vn/tammi/dangkyinternet .
 Chi tiết liên hệ 18008119 (0đ). Từ chối QC: TC3 gửi 199.
 
-[TB] NẠP THẺ LIỀN TAY, DATA XÀI NGAY!
-Tặng 20% giá trị tất cả thẻ nạp trong ngày 26/10/2026. Tiền KM sử dụng truy cập Internet trong 15 ngày.
-Nạp thẻ online tại các ví điện tử, ứng dụng thanh toán hoặc trên app Viettel Tammi tại https://vieteltammi.go.link/naptienkm20
-Chi tiết gọi 197 (phím 19, 0đ). Trân trọng.
+GIẢM 300K (trừ vào cước sử dụng) khi đăng ký lắp đặt Internet và thanh toán trước cước (từ 3 tháng trở lên) trên Viettel Tammi: Cước phí chỉ từ 210K/tháng, miễn phí Modem Wifi 6 và thiết bị Mesh phủ sóng rộng.
+Đăng ký ngay tại https://vietel.vn/tammi/dangkyinternet .
+Chi tiết liên hệ 18008119 (0đ). Từ chối QC: TC3 gửi 199.
 
 [Techcombank] Quy khach vua phat sinh yeu cau rut tien mat tai ATM khac he thong so tien 5.000.000d vao luc 15:45. Neu khong thuc hien giao dich nay, Quy khach mo ngay ung dung Techcombank Mobile, chon 'Khoa the khan cap' hoac goi tong dai mien phi 24/7 qua so 1800588822 de duoc ho tro phong toa tai khoan tuc thi.
 
