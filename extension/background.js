@@ -133,7 +133,7 @@ async function updateTabBadge(tabId, url) {
     const u = new URL(url);
     const host = u.hostname.toLowerCase();
 
-    // Kiem tra danh ba tin cay cuc bo (0ms)
+    // 1. Kiem tra danh ba to chuc tin cay (0ms)
     const isGovEdu = host.endsWith(".gov.vn") || host.endsWith(".edu.vn");
     if (isGovEdu || TRUSTED_DOMAINS.some(d => host === d || host.endsWith("." + d))) {
       chrome.action.setBadgeText({ tabId, text: "SAFE" });
@@ -141,40 +141,39 @@ async function updateTabBadge(tabId, url) {
       return;
     }
 
-    // Kiem tra danh ba doc hai cuc bo (0ms)
-    if (KNOWN_MALICIOUS_DOMAINS.some(d => host === d || host.endsWith("." + d))) {
+    // 2. Kiem tra nhanh cac duoi ten mien nguy co cao hoac tu khoa co bac / lua dao (0ms cuc bo)
+    const suspiciousTlds = [
+      "life", "xyz", "top", "vip", "work", "click", "buzz", "club", "cam",
+      "fit", "rest", "icu", "sbs", "cfd", "space", "link", "monster", "tk", "ml", "ga",
+      "bid", "bond", "cyou", "download", "stream", "live"
+    ];
+    const gamblingKeywords = ["1win", "sunwin", "go88", "taixiu", "gamebai", "hitclub", "b52", "rikvip", "kubet", "thabet", "casino"];
+    const tld = host.split(".").pop();
+    const isKnownMalicious = KNOWN_MALICIOUS_DOMAINS.some(d => host === d || host.endsWith("." + d));
+
+    if (isKnownMalicious || suspiciousTlds.includes(tld) || gamblingKeywords.some(kw => host.includes(kw))) {
       chrome.action.setBadgeText({ tabId, text: "DANGER" });
       chrome.action.setBadgeBackgroundColor({ tabId, color: "#aa0a27" });
+      URL_VERDICT_CACHE.set(url, { score: 100, is_scam: true });
       return;
     }
 
-    // Kiem tra bo nho dem (0.01ms)
+    // 3. Kiem tra bo nho dem (0.01ms)
     if (URL_VERDICT_CACHE.has(url)) {
       const cached = URL_VERDICT_CACHE.get(url);
       applyBadge(tabId, cached.score, cached.is_scam);
       return;
     }
 
-    // Kiem tra qua heuristic nhanh
+    // 4. Kiem tra qua backend API
     const res = await fetchApi("/inspect-heuristics", { url, dom: {} }, "POST");
     const isScam = res.verdict === "DANGEROUS" || (res.safety_score !== undefined && res.safety_score <= 35);
     const score = Math.max(0, 100 - (res.safety_score ?? 100));
     URL_VERDICT_CACHE.set(url, { score, is_scam: isScam });
     applyBadge(tabId, score, isScam);
   } catch (e) {
-    // Du phong ngoai tuyen: Phat hien cac duoi ten mien co bac / lua dao nguy co cao
-    try {
-      const u = new URL(url);
-      const host = u.hostname.toLowerCase();
-      const suspiciousTlds = [
-        "life", "xyz", "top", "vip", "work", "click", "buzz", "club", "cam",
-        "fit", "rest", "icu", "sbs", "cfd", "space", "link", "monster", "tk", "ml", "ga"
-      ];
-      const tld = host.split(".").pop();
-      if (suspiciousTlds.includes(tld)) {
-        applyBadge(tabId, 85, true);
-      }
-    } catch (err2) {}
+    // Khong tu dong gan SAFE cho cac trang la khi mang loi
+    chrome.action.setBadgeText({ tabId, text: "" });
   }
 }
 
@@ -186,8 +185,8 @@ function applyBadge(tabId, score, isScam) {
     chrome.action.setBadgeText({ tabId, text: "WARN" });
     chrome.action.setBadgeBackgroundColor({ tabId, color: "#d97706" });
   } else {
-    chrome.action.setBadgeText({ tabId, text: "SAFE" });
-    chrome.action.setBadgeBackgroundColor({ tabId, color: "#16a34a" });
+    // Tuyet doi khong tu y hien thi SAFE tren thanh cong cu cho cac web la chua kiem chung!
+    chrome.action.setBadgeText({ tabId, text: "" });
   }
 }
 

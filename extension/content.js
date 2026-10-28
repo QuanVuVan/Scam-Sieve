@@ -267,48 +267,7 @@
     return true;
   });
 
-  // 3. TÍNH NĂNG 2: CHẶN VÀ CẢNH BÁO FORM NHẠY CẢM TRÊN TÊN MIỀN LẠ (In-page Sensitive Input Shield)
-  if (!isTrustedSite) {
-    function setupSensitiveInputListener() {
-      const otpRegex = /(otp|ma-otp|ma_otp|xacthuc|token|verification|verify-code)/i;
-      const cardRegex = /(card|credit|debit|cvv|cvc|expir|sothe|so_the)/i;
-
-      document.addEventListener("focusin", (e) => {
-        const target = e.target;
-        if (!target || target.tagName !== "INPUT") return;
-
-        // Kiểm tra xem đã tắt cảnh báo trong phiên làm việc này chưa
-        if (sessionStorage.getItem("psieve_shield_dismissed") === "true") return;
-
-        const type = (target.type || "").toLowerCase();
-        const name = (target.name || "").toLowerCase();
-        const id = (target.id || "").toLowerCase();
-        const placeholder = (target.placeholder || "").toLowerCase();
-        const allAttr = `${name} ${id} ${placeholder}`;
-
-        let sensitiveType = null;
-        if (type === "password") {
-          sensitiveType = "MẬT KHẨU";
-        } else if (otpRegex.test(allAttr)) {
-          sensitiveType = "MÃ XÁC THỰC OTP";
-        } else if (cardRegex.test(allAttr)) {
-          sensitiveType = "THÔNG TIN THẺ NGÂN HÀNG / CVV";
-        }
-
-        if (sensitiveType) {
-          showSensitiveShieldBanner(sensitiveType);
-        }
-      }, true);
-    }
-
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", setupSensitiveInputListener);
-    } else {
-      setupSensitiveInputListener();
-    }
-  }
-
-    // Ham thoat khoi trang nguy hiem an toan tuyet doi (chong moi bay popstate/beforeunload cua hacker)
+  // 3. TÍNH NĂNG: CẢNH BÁO BẢO MẬT KHI NHẬP MẬT KHẨU / DỮ LIỆU NHẠY CẢM
   function executeSafeLeave() {
     try {
       window.onbeforeunload = null;
@@ -335,40 +294,40 @@
     banner.id = "psieve-sensitive-shield";
     banner.style.cssText = `
       position: fixed;
-      bottom: 20px;
-      right: 20px;
-      max-width: 440px;
+      bottom: 24px;
+      right: 24px;
+      max-width: 420px;
       background-color: #aa0a27;
       color: #FFFFFF;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 13px;
       line-height: 1.5;
-      padding: 16px 18px;
+      padding: 16px 20px;
       border-radius: 8px;
       z-index: 2147483647;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-      border: 2px solid #FFFFFF;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.3);
     `;
 
     const titleEl = document.createElement("div");
-    titleEl.style.cssText = "font-weight: 900; font-size: 14px; margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase;";
-    titleEl.textContent = "CANH BAO AN NINH P-SIEVE: TRANG WEB CHUA XAC THUC";
+    titleEl.style.cssText = "font-weight: 800; font-size: 14px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;";
+    titleEl.textContent = "Cảnh báo bảo mật: Trang web chưa xác thực";
 
     const descEl = document.createElement("div");
-    descEl.style.cssText = "margin-bottom: 12px; font-weight: 500;";
-    descEl.textContent = `Trang web này (${currentHost}) chưa được xác thực trong danh bạ tổ chức chính thống. Bạn đang thao tác tại ô nhập [${sensitiveType}]. Tuyệt đối KHÔNG cung cấp nếu chưa kiểm chứng rõ danh tính người sở hữu!`;
+    descEl.style.cssText = "margin-bottom: 14px; font-weight: 500; color: #fef2f2;";
+    descEl.textContent = `Trang web này (${currentHost}) không thuộc danh bạ tổ chức uy tín. Bạn đang nhập ${sensitiveType}. Vui lòng không cung cấp thông tin nếu chưa xác minh rõ trang web.`;
 
     const btnRow = document.createElement("div");
     btnRow.style.cssText = "display: flex; gap: 10px; justify-content: flex-end;";
 
     const leaveBtn = document.createElement("button");
-    leaveBtn.textContent = "Rời khỏi trang này";
+    leaveBtn.textContent = "Rời khỏi trang web";
     leaveBtn.style.cssText = `
       background-color: #FFFFFF;
       color: #aa0a27;
       border: none;
-      padding: 6px 12px;
-      border-radius: 4px;
+      padding: 7px 14px;
+      border-radius: 5px;
       font-weight: 700;
       font-size: 12px;
       cursor: pointer;
@@ -379,13 +338,13 @@
     };
 
     const continueBtn = document.createElement("button");
-    continueBtn.textContent = "Tôi hiểu rủi ro, tiếp tục";
+    continueBtn.textContent = "Tiếp tục, tôi hiểu rồi";
     continueBtn.style.cssText = `
-      background-color: rgba(255,255,255,0.2);
+      background-color: rgba(255,255,255,0.18);
       color: #FFFFFF;
-      border: 1px solid #FFFFFF;
-      padding: 6px 12px;
-      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.5);
+      padding: 7px 14px;
+      border-radius: 5px;
       font-weight: 600;
       font-size: 12px;
       cursor: pointer;
@@ -404,109 +363,52 @@
     document.body.appendChild(banner);
   }
 
-  // 4. Tu dong kiem tra trang web qua Service Worker (Khong lo loi Mixed Content)
+  if (!isTrustedSite) {
+    function setupSensitiveInputListener() {
+      const otpRegex = /(otp|ma-otp|ma_otp|xacthuc|token|verification|verify-code)/i;
+      const cardRegex = /(card|credit|debit|cvv|cvc|expir|sothe|so_the)/i;
+
+      function checkAndShowBanner(target) {
+        if (!target || target.tagName !== "INPUT") return;
+        if (sessionStorage.getItem("psieve_shield_dismissed") === "true") return;
+
+        const type = (target.type || "").toLowerCase();
+        const name = (target.name || "").toLowerCase();
+        const id = (target.id || "").toLowerCase();
+        const placeholder = (target.placeholder || "").toLowerCase();
+        const allAttr = `${name} ${id} ${placeholder}`;
+
+        let sensitiveType = null;
+        if (type === "password") {
+          sensitiveType = "mật khẩu";
+        } else if (otpRegex.test(allAttr)) {
+          sensitiveType = "mã xác thực OTP";
+        } else if (cardRegex.test(allAttr)) {
+          sensitiveType = "thông tin thẻ ngân hàng";
+        }
+
+        if (sensitiveType) {
+          showSensitiveShieldBanner(sensitiveType);
+        }
+      }
+
+      document.addEventListener("focusin", (e) => checkAndShowBanner(e.target), true);
+      document.addEventListener("click", (e) => checkAndShowBanner(e.target), true);
+      document.addEventListener("input", (e) => checkAndShowBanner(e.target), true);
+      document.addEventListener("keydown", (e) => checkAndShowBanner(e.target), true);
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", setupSensitiveInputListener);
+    } else {
+      setupSensitiveInputListener();
+    }
+  }
+
+  // 4. Tu dong gui dac trung DOM cho Service Worker cap nhat phan tich ngam
   const domPayload = extractPageFeatures();
-
   try {
-    chrome.runtime.sendMessage(
-      { action: "inspect_page", payload: domPayload },
-      (response) => {
-        if (chrome.runtime.lastError || !response || !response.success || !response.data) {
-          return;
-        }
-        const data = response.data;
-        if (data.is_scam || data.score >= 50 || data.risk_level === "HIGH") {
-          const reasonText = (data.reasons && data.reasons.length > 0)
-            ? data.reasons.join(" | ")
-            : (data.summary || "Phát hiện dấu hiệu lừa đảo nguy hiểm hoặc cờ bạc bất hợp pháp.");
-          showPhishingAlertBanner(data.score, reasonText);
-        }
-      }
-    );
-  } catch (err) {
-    // Du phong ngoai tuyen neu mang ban: Kiem tra TLD nguy co cao
-    try {
-      const suspiciousTlds = ["life", "xyz", "top", "vip", "work", "click", "buzz", "club", "cam", "fit", "rest", "icu", "sbs", "cfd", "monster", "tk", "ml", "ga"];
-      const tld = currentHost.split(".").pop();
-      if (!isTrustedSite && suspiciousTlds.includes(tld)) {
-        showPhishingAlertBanner(85, `Tên miền sử dụng phần mở rộng có nguy cơ lừa đảo / cờ bạc rất cao (.${tld}).`);
-      }
-    } catch (e2) {}
-  }
-
-  function showPhishingAlertBanner(score, detailReason) {
-    if (document.getElementById("psieve-warning-banner")) return;
-
-    const banner = document.createElement("div");
-    banner.id = "psieve-warning-banner";
-    banner.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      background-color: #aa0a27;
-      color: #FFFFFF;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 13.5px;
-      font-weight: 700;
-      padding: 12px 20px;
-      z-index: 2147483647;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-      border-bottom: 2px solid #FFFFFF;
-      box-sizing: border-box;
-    `;
-
-    const textSpan = document.createElement("span");
-    textSpan.style.cssText = "line-height: 1.4; padding-right: 15px;";
-    textSpan.textContent = `🚨 CẢNH BÁO AN NINH P-SIEVE (Rủi ro ${score}/100): ${detailReason}. TUYỆT ĐỐI KHÔNG đăng nhập, không nạp tiền hay cung cấp thông tin cá nhân/OTP!`;
-
-    const btnGroup = document.createElement("div");
-    btnGroup.style.cssText = "display: flex; gap: 8px; flex-shrink: 0;";
-
-    const leaveBtn = document.createElement("button");
-    leaveBtn.textContent = "🛡️ Rời khỏi trang ngay";
-    leaveBtn.style.cssText = `
-      background-color: #FFFFFF;
-      color: #aa0a27;
-      border: none;
-      padding: 7px 16px;
-      border-radius: 6px;
-      font-weight: 800;
-      font-size: 12.5px;
-      cursor: pointer;
-      white-space: nowrap;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-    `;
-    leaveBtn.onclick = function (e) {
-      if (e) { e.preventDefault(); e.stopPropagation(); }
-      executeSafeLeave();
-    };
-
-    const closeBtn = document.createElement("button");
-    closeBtn.textContent = "Tôi hiểu rủi ro, đóng";
-    closeBtn.style.cssText = `
-      background-color: rgba(255,255,255,0.2);
-      color: #FFFFFF;
-      border: 1px solid #FFFFFF;
-      padding: 6px 12px;
-      border-radius: 4px;
-      font-weight: 600;
-      font-size: 12px;
-      cursor: pointer;
-      white-space: nowrap;
-    `;
-    closeBtn.onclick = function () {
-      banner.remove();
-    };
-
-    btnGroup.appendChild(leaveBtn);
-    btnGroup.appendChild(closeBtn);
-    banner.appendChild(textSpan);
-    banner.appendChild(btnGroup);
-    document.body.prepend(banner);
-  }
+    chrome.runtime.sendMessage({ action: "inspect_page", payload: domPayload });
+  } catch (err) {}
 })();
 

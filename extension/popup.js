@@ -70,7 +70,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const scoreNumber = document.getElementById("score-number");
   const verdictHeading = document.getElementById("verdict-heading");
   const benchmarkPill = document.getElementById("benchmark-pill");
-  const btnEmergencyLeave = document.getElementById("btn-emergency-leave");
   const btnToggleDetails = document.getElementById("btn-toggle-details");
   const criteriaCloud = document.getElementById("criteria-cloud");
   const criteriaContainer = document.getElementById("criteria-badges-container");
@@ -130,17 +129,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       gaugeProgress.style.stroke = "var(--pass)";
       verdictHeading.style.color = "var(--pass)";
       btnToggleDetails.className = "btn-toggle-details";
-      if (btnEmergencyLeave) btnEmergencyLeave.style.display = "none";
     } else if (verdictType === "SUSPICIOUS") {
       gaugeProgress.style.stroke = "var(--warn)";
       verdictHeading.style.color = "var(--warn)";
       btnToggleDetails.className = "btn-toggle-details";
-      if (btnEmergencyLeave) btnEmergencyLeave.style.display = "none";
     } else {
       gaugeProgress.style.stroke = "var(--fail)";
       verdictHeading.style.color = "var(--fail)";
       btnToggleDetails.className = "btn-toggle-details danger";
-      if (btnEmergencyLeave) btnEmergencyLeave.style.display = "block";
     }
   }
 
@@ -480,24 +476,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // 6. Xử lý đóng mở chi tiết tiêu chí
-  if (btnEmergencyLeave) {
-    btnEmergencyLeave.addEventListener("click", async () => {
-      try {
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tabs && tabs[0] && tabs[0].id) {
-          chrome.tabs.update(tabs[0].id, { url: "https://www.google.com" }, () => {
-            if (chrome.runtime.lastError) {
-              chrome.tabs.remove(tabs[0].id);
-            }
-            window.close();
-          });
-        }
-      } catch (e) {
-        window.close();
-      }
-    });
-  }
-
   btnToggleDetails.addEventListener("click", () => {
     if (criteriaCloud.style.display === "none") {
       criteriaCloud.style.display = "block";
