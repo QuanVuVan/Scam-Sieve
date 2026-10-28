@@ -20,9 +20,11 @@ GROQ_MODELS = [
 ]
 
 GEMINI_MODELS = [
-    "gemini-flash-lite-latest",
-    "gemini-2.0-flash-exp",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-3.7-flash",
     "gemini-3.1-flash-lite",
+    "gemini-flash-latest",
 ]
 
 
@@ -75,23 +77,40 @@ class GeminiSecurityService:
             logger.warning(f"Image preprocessing warning: {e}")
             return image_bytes, "image/jpeg"
 
-    def _generate_fallback_vision_result(self, reason: str = "quá tải hạn mức") -> Dict[str, Any]:
+    @staticmethod
+    def _sanitize_error_reason(raw_err: str) -> str:
+        """Chuẩn hóa thông điệp lỗi kỹ thuật thành câu thông báo thân thiện với người dùng."""
+        if not raw_err:
+            return "kết nối tạm thời không ổn định"
+        err_lower = raw_err.lower()
+        if "503" in raw_err or "high demand" in err_lower or "unavailable" in err_lower:
+            return "đang có lượng yêu cầu đột biến (503 High Demand)"
+        if "429" in raw_err or "quota" in err_lower or "rate limit" in err_lower:
+            return "đạt giới hạn tần suất yêu cầu (429 Rate Limit)"
+        if "timeout" in err_lower or "timed out" in err_lower:
+            return "phản hồi quá thời gian chờ (Timeout)"
+        if "404" in raw_err or "not found" in err_lower:
+            return "đang bảo trì phiên bản mô hình"
+        return "kết nối tạm thời gián đoạn"
+
+    def _generate_fallback_vision_result(self, reason: str = "") -> Dict[str, Any]:
         """
-        Cơ chế giám định an ninh dự phòng khi Google Gemini bị 429 (Quota limit) hoặc Timeout.
+        Cơ chế giám định an ninh dự phòng khi Google Gemini bị 429 (Quota limit), 503 hoặc Timeout.
         Đảm bảo hệ thống KHÔNG BAO GIỜ bị chết, vẫn phản hồi ngay lập tức cho người dùng.
         """
+        clean_reason = self._sanitize_error_reason(reason)
         return {
             "active": True,
             "is_scam": False,
             "is_fallback": True,
             "confidence": 75.0,
             "risk_level": "LOW",
-            "category": f"Chế độ an ninh dự phòng (Máy chủ AI {reason})",
+            "category": f"Chế độ an ninh dự phòng (Máy chủ AI {clean_reason})",
             "extracted_text": "",
             "extracted_phone": "",
             "extracted_url": "",
             "visual_evidence": [
-                f"Máy chủ AI quốc tế hiện đang phản hồi chậm hoặc đạt ngưỡng tần suất yêu cầu ({reason}).",
+                f"Máy chủ AI quốc tế hiện đang phản hồi chậm hoặc đạt ngưỡng tần suất yêu cầu ({clean_reason}).",
                 "Hệ thống đã tự động kích hoạt bộ lọc bảo vệ an ninh và phân tích cục bộ.",
                 "Bạn có thể sao chép văn bản, số điện thoại hoặc đường link nghi ngờ vào ô kiểm tra bên cạnh để kiểm tra chuyên sâu bằng mô hình Machine Learning nội bộ."
             ],
@@ -405,7 +424,7 @@ class GeminiSecurityService:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
             try:
-                with httpx.Client(timeout=9.0) as client:
+                with httpx.Client(timeout=22.0) as client:
                     response = client.post(url, json=payload, headers=headers)
 
                 if response.status_code == 200:
@@ -422,8 +441,12 @@ class GeminiSecurityService:
                     last_error = f"Model {model} chạm hạn mức (HTTP 429)"
                     logger.warning(f"Gemini Vision API quota exceeded (HTTP 429) on model {model}, trying next model...")
                     continue
+                elif response.status_code == 503:
+                    last_error = f"Model {model} quá tải (HTTP 503)"
+                    logger.warning(f"Gemini Vision API 503 high demand on model {model}, trying next model...")
+                    continue
                 else:
-                    last_error = f"Model {model} HTTP {response.status_code}: {response.text[:120]}"
+                    last_error = f"Model {model} HTTP {response.status_code}"
                     logger.warning(f"Gemini Vision API warning: {last_error}")
             except httpx.TimeoutException:
                 last_error = f"Model {model} phản hồi quá lâu (Timeout)"
@@ -434,7 +457,7 @@ class GeminiSecurityService:
                 logger.error(f"Error calling Gemini Vision model {model}: {e}")
 
         # Neu khong co model nao phan hoi kip thoi, kich hoat che do bao ve noi bo thay vi bao loi
-        return self._generate_fallback_vision_result(reason=f"kết nối không ổn định ({last_error})")
+        return self._generate_fallback_vision_result(reason=last_error)
 
     def _fallback_webpage_semantic(
         self,
