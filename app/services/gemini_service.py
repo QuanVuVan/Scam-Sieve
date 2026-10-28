@@ -20,6 +20,7 @@ GROQ_MODELS = [
 ]
 
 GEMINI_MODELS = [
+    "gemini-3-flash-preview",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-flash-latest",
@@ -359,7 +360,8 @@ class GeminiSecurityService:
             "Viện kiểm sát, Tòa án nhằm đe dọa tống tiền người dân.\n"
             "3. ẢNH CHỤP MÀN HÌNH TIN NHẮN / ĐOẠN CHAT LỪA ĐẢO: Chat Zalo/Telegram tuyển dụng làm nhiệm vụ online, "
             "nạp tiền nhận hoa hồng, đầu tư tiền ảo/Forex, hoặc thông báo trúng thưởng đóng phí.\n"
-            "4. THÔNG BÁO / VĂN BẢN MẠO DANH DOANH NGHIỆP: Nâng cấp SIM, thông báo trúng quà tặng, đòi nợ cước viễn thông chứa link lạ, tải file APK độc hại.\n\n"
+            "4. THÔNG BÁO / VĂN BẢN MẠO DANH DOANH NGHIỆP: Nâng cấp SIM, thông báo trúng quà tặng, đòi nợ cước viễn thông chứa link lạ, tải file APK độc hại.\n"
+            "5. TIN NHẮN MƯỢN TIỀN / NHỜ CHUYỂN KHOẢN GẤP (Impersonation Money Request): Hack nick người quen, bạn bè, tạo tình huống khẩn cấp (tài khoản lỗi, đang mua đồ tại quán cần chuyển gấp, nhờ nạp tiền...) kèm ảnh máy quẹt thẻ POS hoặc số tài khoản ngân hàng lạ.\n\n"
             "QUY TẮC ĐẶC BIỆT QUAN TRỌNG ĐỂ TRÁNH BÁO NHẦM (FALSE POSITIVE):\n"
             "- Rất nhiều tin nhắn là TIN NHẮN QUẢNG CÁO, KHUYẾN MÃI, CHĂM SÓC KHÁCH HÀNG CHÍNH THỐNG của các nhà mạng (Viettel, Vinaphone, Mobifone) hoặc Ngân hàng/Doanh nghiệp lớn.\n"
             "- DANH SÁCH TÊN MIỀN VÀ ĐẦU SỐ CHÍNH THỨC CẦN LƯU Ý:\n"
@@ -374,7 +376,8 @@ class GeminiSecurityService:
             "  + KHÔNG yêu cầu chuyển tiền đến tài khoản cá nhân, KHÔNG yêu cầu đọc/nhập mã OTP hay mật khẩu, KHÔNG đe dọa khóa số hay phạt tiền.\n"
             "  -> KHI ĐÓ: Tuyệt đối KHÔNG được kết luận là lừa đảo. Hãy kết luận 'is_scam': false, 'risk_level': 'LOW', 'category': 'Tin nhắn quảng cáo / Chăm sóc khách hàng chính thống'.\n\n"
             "NHIỆM VỤ CỦA BẠN:\n"
-            "- Trích xuất CHÍNH XÁC 100% NGUYÊN VĂN toàn bộ nội dung xuất hiện trong ảnh (từng câu, từng chữ, số điện thoại, đường link, số tài khoản). Tuyệt đối KHÔNG được tóm tắt, KHÔNG được chỉ trích xuất mỗi đường link hay mỗi số điện thoại mà phải giữ trọn vẹn toàn bộ đoạn văn bản ngữ cảnh.\n"
+            "- TRÍCH XUẤT CHÍNH XÁC TUYỆT ĐỐI 100% NGUYÊN VĂN toàn bộ nội dung xuất hiện trong ảnh: Đọc chuẩn xác từng chữ, giữ đúng dấu tiếng Việt và tiếng lóng mạng (ví dụ: 'ck' = chuyển khoản, 'cứu em với', '450 à', 'xiu em ck lại liền á'). Tuyệt đối KHÔNG viết sai chính tả, KHÔNG đoán mò, KHÔNG làm méo mó các từ ngữ trong ảnh.\n"
+            "- NẾU LÀ TIN NHẮN NHỜ CHUYỂN TIỀN / MƯỢN TIỀN VỚI LÝ DO TÀI KHOẢN LỖI: Đây là hành vi lừa đảo chiếm quyền điều khiển tài khoản (hack nick) điển hình. Kết luận ngay: 'is_scam': true, 'risk_level': 'HIGH', 'category': 'Lừa đảo mượn tiền / Nhờ chuyển khoản gấp'.\n"
             "- Chỉ ra các bằng chứng thị giác cụ thể (Visual Evidence).\n"
             "- Đưa ra kết luận khách quan, chính xác.\n\n"
             "QUAN TRỌNG: Bạn chỉ được trả về DUY NHẤT một chuỗi JSON chuẩn (không bọc trong markdown ```json, không có lời dẫn nào khác) với cấu trúc sau:\n"
@@ -422,7 +425,7 @@ class GeminiSecurityService:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
             try:
-                with httpx.Client(timeout=7.0) as client:
+                with httpx.Client(timeout=10.0) as client:
                     response = client.post(url, json=payload, headers=headers)
 
                 if response.status_code == 200:

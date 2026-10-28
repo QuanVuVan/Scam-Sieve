@@ -643,6 +643,23 @@ async def handle_scan_image(
             "status_label": "Phát hiện giả mạo hình ảnh",
             "summary": vision_result.get("analysis", "Phát hiện dấu hiệu lừa đảo trên hình ảnh."),
         }
+    elif vision_result.get('is_fallback'):
+        score = 50
+        risk_level = RiskLevel.MEDIUM
+        ai_result = {
+            'active': True,
+            'scam_prob': 50.0,
+            'safe_prob': 50.0,
+            'is_scam': False,
+            'is_suspicious': True,
+            'confidence': 75.0,
+            'status_label': 'Chưa thể trích xuất toàn vẹn ảnh',
+            'summary': (
+                'Máy chủ thị giác đang phản hồi chậm hoặc ảnh chụp có chi tiết mờ. '
+                'Hệ thống đã kích hoạt cơ chế phòng vệ an ninh và khuyến cáo người dùng '
+                'sao chép trực tiếp văn bản hoặc số điện thoại trong ảnh vào ô kiểm tra bên cạnh.'
+            ),
+        }
     else:
         score, risk_level = score_and_classify(matches)
         ai_result = {
