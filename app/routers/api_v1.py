@@ -333,19 +333,38 @@ def api_v1_inspect_page(
             break
 
     # 5. KIỂM TRA PHẦN MỞ RỘNG TÊN MIỀN NGUY CƠ CAO (High-risk TLD Intelligence)
-    for tld in HIGH_RISK_TLDS:
-        if netloc.endswith(tld):
-            signals["is_high_risk_tld"] = True
-            reasons.append(f"Tên miền sử dụng phần mở rộng có rủi ro lừa đảo cao ({tld}).")
-            break
+    from app.detector.patterns.url_patterns import SUSPICIOUS_TLDS
+    tld_candidate = netloc.split(".")[-1] if "." in netloc else ""
+    if tld_candidate in SUSPICIOUS_TLDS or any(netloc.endswith("." + tld.lstrip(".")) for tld in HIGH_RISK_TLDS):
+        signals["is_high_risk_tld"] = True
+        reasons.append(f"Tên miền sử dụng phần mở rộng có rủi ro lừa đảo / cờ bạc cao (.{tld_candidate}).")
 
-    # 6. KẾT HỢP VỚI ĐỘNG CƠ GIÁM ĐỊNH TỔNG HỢP P-SIEVE
+    # 6. KẾT HỢP VỚI ĐỘNG CƠ GIÁM ĐỊNH TỔNG HỢP P-SIEVE & HEURISTIC ĐA TẦNG
+    from app.detector.heuristics import evaluate_heuristics
+    dom_inspect = {
+        "has_password_input": req.has_password_input,
+        "has_otp_input": req.has_otp_input,
+        "has_credit_card_input": req.has_credit_card_input,
+        "form_action_domains": req.form_action_domains,
+        "text_snippet": text_snippet,
+    }
+    heur_eval = evaluate_heuristics(url=clean_url, dom=dom_inspect, db=db)
+    heur_safety = heur_eval.get("safety_score", 100)
+    heur_risk = max(0, 100 - heur_safety)
+    heur_is_dangerous = heur_eval.get("verdict") == "DANGEROUS" or heur_safety <= 35
+    heur_is_suspicious = heur_eval.get("verdict") == "SUSPICIOUS" or heur_safety < 70
+
     full_text_inspect = f"{clean_url} {title} {text_snippet}".strip()
     raw_matches = detect_all(full_text_inspect) + check_community_reputation_matches(clean_url, db) + bl_matches
     unified_eval = scorer.evaluate_unified_risk(content=full_text_inspect, raw_matches=raw_matches)
 
     # 7. TÍNH ĐIỂM TỔNG HỢP (Ensemble Calibrated Score)
     final_score = unified_eval["score"]
+    if heur_is_dangerous:
+        final_score = max(final_score, heur_risk, 80)
+    elif heur_is_suspicious:
+        final_score = max(final_score, heur_risk, 50)
+
     if signals.get("in_blacklist"):
         final_score = max(final_score, 95)
     if signals["brand_spoofed"]:
@@ -355,22 +374,29 @@ def api_v1_inspect_page(
     if signals["cross_domain_form"]:
         final_score = min(final_score + 35, 100)
     if signals.get("is_high_risk_tld") and not is_trusted:
-        final_score = max(final_score, 50)
+        final_score = max(final_score, 75)
 
     # Nếu không có dấu hiệu nhạy cảm, không mạo danh thương hiệu, không trong blacklist
-    if not signals.get("in_blacklist") and not signals["brand_spoofed"] and not signals["credential_harvesting"] and not signals["cross_domain_form"]:
+    if not signals.get("in_blacklist") and not signals["brand_spoofed"] and not signals["credential_harvesting"] and not signals["cross_domain_form"] and not signals.get("is_high_risk_tld"):
         if features.get("is_ip_domain"):
             final_score = max(final_score, 80)
         elif features.get("is_brand_impersonation"):
             final_score = max(final_score, 75)
-        elif signals.get("is_high_risk_tld"):
-            final_score = max(final_score, 50)
+        elif heur_is_dangerous or unified_eval.get("risk_level") == RiskLevel.HIGH:
+            final_score = max(final_score, 75)
+        elif heur_is_suspicious or unified_eval.get("risk_level") == RiskLevel.MEDIUM:
+            final_score = max(final_score, 45)
         else:
             final_score = min(final_score, 20)
 
-    is_scam = final_score >= 70
-    is_suspicious = 40 <= final_score < 70
-    is_safe = final_score < 40
+    if heur_eval.get("danger_flags"):
+        for df in heur_eval["danger_flags"]:
+            if df not in reasons:
+                reasons.append(df)
+
+    is_scam = final_score >= 70 or heur_is_dangerous or (unified_eval.get("risk_level") == RiskLevel.HIGH)
+    is_suspicious = (40 <= final_score < 70 or heur_is_suspicious) and not is_scam
+    is_safe = not is_scam and not is_suspicious
 
     risk_level_str = "HIGH" if is_scam else ("MEDIUM" if is_suspicious else "LOW")
     if is_scam:

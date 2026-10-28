@@ -157,24 +157,36 @@ async function updateTabBadge(tabId, url) {
 
     // Kiem tra qua heuristic nhanh
     const res = await fetchApi("/inspect-heuristics", { url, dom: {} }, "POST");
-    const isScam = res.verdict === "DANGEROUS";
-    const score = 100 - res.safety_score;
+    const isScam = res.verdict === "DANGEROUS" || (res.safety_score !== undefined && res.safety_score <= 35);
+    const score = Math.max(0, 100 - (res.safety_score ?? 100));
     URL_VERDICT_CACHE.set(url, { score, is_scam: isScam });
     applyBadge(tabId, score, isScam);
   } catch (e) {
-    // Khong chan luong neu backend chua san sang
+    // Du phong ngoai tuyen: Phat hien cac duoi ten mien co bac / lua dao nguy co cao
+    try {
+      const u = new URL(url);
+      const host = u.hostname.toLowerCase();
+      const suspiciousTlds = [
+        "life", "xyz", "top", "vip", "work", "click", "buzz", "club", "cam",
+        "fit", "rest", "icu", "sbs", "cfd", "space", "link", "monster", "tk", "ml", "ga"
+      ];
+      const tld = host.split(".").pop();
+      if (suspiciousTlds.includes(tld)) {
+        applyBadge(tabId, 85, true);
+      }
+    } catch (err2) {}
   }
 }
 
 function applyBadge(tabId, score, isScam) {
-  if (isScam || score >= 70) {
+  if (isScam || score >= 60) {
     chrome.action.setBadgeText({ tabId, text: "DANGER" });
     chrome.action.setBadgeBackgroundColor({ tabId, color: "#aa0a27" });
-  } else if (score >= 40) {
+  } else if (score >= 35) {
     chrome.action.setBadgeText({ tabId, text: "WARN" });
     chrome.action.setBadgeBackgroundColor({ tabId, color: "#d97706" });
   } else {
-    chrome.action.setBadgeText({ tabId, text: "OK" });
+    chrome.action.setBadgeText({ tabId, text: "SAFE" });
     chrome.action.setBadgeBackgroundColor({ tabId, color: "#16a34a" });
   }
 }
@@ -197,6 +209,28 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
 // 5. Cung cap Proxy API qua Message Passing cho Content Script (Tranh Mixed Content)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "leave_dangerous_site") {
+    const tabId = sender && sender.tab ? sender.tab.id : null;
+    if (tabId) {
+      chrome.tabs.update(tabId, { url: "https://www.google.com" }, () => {
+        if (chrome.runtime.lastError) {
+          chrome.tabs.remove(tabId);
+        }
+      });
+    }
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (request.action === "close_tab") {
+    const tabId = sender && sender.tab ? sender.tab.id : null;
+    if (tabId) {
+      chrome.tabs.remove(tabId);
+    }
+    sendResponse({ success: true });
+    return true;
+  }
+
   if (request.action === "inspect_page") {
     fetchApi("/inspect-page", request.payload, "POST")
       .then((data) => {

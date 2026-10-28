@@ -199,6 +199,30 @@ body {
   margin-bottom: 8px;
 }
 
+.btn-emergency-leave {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #aa0a27, #88081f);
+  color: #ffffff;
+  border: 1px solid #ffffff;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(170, 10, 39, 0.4);
+  transition: all 0.2s ease;
+  text-align: center;
+  letter-spacing: 0.3px;
+}
+
+.btn-emergency-leave:hover {
+  background: linear-gradient(135deg, #88081f, #660617);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(170, 10, 39, 0.55);
+}
+
 .btn-toggle-details {
   background: transparent;
   color: var(--text-muted);

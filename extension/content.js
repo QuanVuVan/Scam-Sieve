@@ -308,6 +308,26 @@
     }
   }
 
+    // Ham thoat khoi trang nguy hiem an toan tuyet doi (chong moi bay popstate/beforeunload cua hacker)
+  function executeSafeLeave() {
+    try {
+      window.onbeforeunload = null;
+      window.onunload = null;
+    } catch (e) {}
+
+    try {
+      chrome.runtime.sendMessage({ action: "leave_dangerous_site" });
+    } catch (e) {}
+
+    setTimeout(() => {
+      try {
+        window.location.replace("https://www.google.com");
+      } catch (e) {
+        window.location.href = "https://www.google.com";
+      }
+    }, 120);
+  }
+
   function showSensitiveShieldBanner(sensitiveType) {
     if (document.getElementById("psieve-sensitive-shield")) return;
 
@@ -325,7 +345,7 @@
       line-height: 1.5;
       padding: 16px 18px;
       border-radius: 8px;
-      z-index: 999999999;
+      z-index: 2147483647;
       box-shadow: 0 8px 24px rgba(0,0,0,0.4);
       border: 2px solid #FFFFFF;
     `;
@@ -353,12 +373,9 @@
       font-size: 12px;
       cursor: pointer;
     `;
-    leaveBtn.onclick = function () {
-      if (window.history.length > 1) {
-        window.history.back();
-      } else {
-        window.location.href = "about:blank";
-      }
+    leaveBtn.onclick = function (e) {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      executeSafeLeave();
     };
 
     const continueBtn = document.createElement("button");
@@ -398,16 +415,23 @@
           return;
         }
         const data = response.data;
-        if (data.is_scam && data.score >= 70) {
+        if (data.is_scam || data.score >= 50 || data.risk_level === "HIGH") {
           const reasonText = (data.reasons && data.reasons.length > 0)
             ? data.reasons.join(" | ")
-            : "Phat hien dau hieu gia mao thuong hieu hoac bay danh cap thong tin";
+            : (data.summary || "Phát hiện dấu hiệu lừa đảo nguy hiểm hoặc cờ bạc bất hợp pháp.");
           showPhishingAlertBanner(data.score, reasonText);
         }
       }
     );
   } catch (err) {
-    // Bo qua neu Service Worker tam thoi khong phan hoi
+    // Du phong ngoai tuyen neu mang ban: Kiem tra TLD nguy co cao
+    try {
+      const suspiciousTlds = ["life", "xyz", "top", "vip", "work", "click", "buzz", "club", "cam", "fit", "rest", "icu", "sbs", "cfd", "monster", "tk", "ml", "ga"];
+      const tld = currentHost.split(".").pop();
+      if (!isTrustedSite && suspiciousTlds.includes(tld)) {
+        showPhishingAlertBanner(85, `Tên miền sử dụng phần mở rộng có nguy cơ lừa đảo / cờ bạc rất cao (.${tld}).`);
+      }
+    } catch (e2) {}
   }
 
   function showPhishingAlertBanner(score, detailReason) {
@@ -426,7 +450,7 @@
       font-size: 13.5px;
       font-weight: 700;
       padding: 12px 20px;
-      z-index: 999999999;
+      z-index: 2147483647;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -437,34 +461,32 @@
 
     const textSpan = document.createElement("span");
     textSpan.style.cssText = "line-height: 1.4; padding-right: 15px;";
-    textSpan.textContent = `CANH BAO AN NINH P-SIEVE (Rui ro ${score}/100): ${detailReason}. TUYET DOI KHONG dang nhap hoac cung cap ma OTP.`;
+    textSpan.textContent = `🚨 CẢNH BÁO AN NINH P-SIEVE (Rủi ro ${score}/100): ${detailReason}. TUYỆT ĐỐI KHÔNG đăng nhập, không nạp tiền hay cung cấp thông tin cá nhân/OTP!`;
 
     const btnGroup = document.createElement("div");
     btnGroup.style.cssText = "display: flex; gap: 8px; flex-shrink: 0;";
 
     const leaveBtn = document.createElement("button");
-    leaveBtn.textContent = "Roi khoi trang";
+    leaveBtn.textContent = "🛡️ Rời khỏi trang ngay";
     leaveBtn.style.cssText = `
       background-color: #FFFFFF;
       color: #aa0a27;
       border: none;
-      padding: 6px 14px;
-      border-radius: 4px;
+      padding: 7px 16px;
+      border-radius: 6px;
       font-weight: 800;
-      font-size: 12px;
+      font-size: 12.5px;
       cursor: pointer;
       white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
     `;
-    leaveBtn.onclick = function () {
-      if (window.history.length > 1) {
-        window.history.back();
-      } else {
-        window.location.href = "about:blank";
-      }
+    leaveBtn.onclick = function (e) {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      executeSafeLeave();
     };
 
     const closeBtn = document.createElement("button");
-    closeBtn.textContent = "Dong";
+    closeBtn.textContent = "Tôi hiểu rủi ro, đóng";
     closeBtn.style.cssText = `
       background-color: rgba(255,255,255,0.2);
       color: #FFFFFF;
