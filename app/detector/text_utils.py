@@ -96,6 +96,9 @@ class TextPreprocessor:
             # Loại bỏ biến mẫu [NUMBER], [MONEY], [DATE], [TIME] và các định dạng số thực tế
             cleaned = re.sub(r'\[[A-Z_]+\]', '', text)
             cleaned = re.sub(r'\d+[.,:/]\d+', '', cleaned)
+            # Loại bỏ protocol và phần mở rộng tên miền tiêu chuẩn (.com, .vn, .net...) để tránh phạt nhầm URL
+            cleaned = re.sub(r'https?://(?:www\.)?', '', cleaned)
+            cleaned = re.sub(r'\.[a-zA-Z]{2,}(?:[/?#]|$)', '', cleaned)
             # Chỉ tính ký tự phân tách chen giữa 2 chữ cái (như "c.k", "t_i_e_n", "o-t-p")
             interspersed = len(re.findall(r'(?<=[a-zA-Z\u00C0-\u1EF9])[.\-_/\\,;:*^~+~|!@#$%&?](?=[a-zA-Z\u00C0-\u1EF9])', cleaned))
             # Đếm các ký tự xáo trộn đặc trưng của spammer bot

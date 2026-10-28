@@ -44,6 +44,7 @@ class RiskScorer:
             # Mạng xã hội & Nền tảng toàn cầu
             'google.com', 'google.com.vn', 'youtube.com', 'microsoft.com', 'apple.com',
             'facebook.com', 'fb.com', 'messenger.com', 'instagram.com', 'threads.net',
+            'whatsapp.com', 'web.whatsapp.com', 'whatsapp.net', 'telegram.org', 't.me',
             'claude.ai', 'claude.com', 'anthropic.com', 'openai.com', 'chatgpt.com',
             'tiktok.com', 'twitter.com', 'x.com',
             # Nền tảng tiếp thị & Chuyển hướng an toàn

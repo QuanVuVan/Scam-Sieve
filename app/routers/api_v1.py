@@ -651,7 +651,7 @@ def api_v1_sync_threat_intel(
     limit = req.limit_per_feed if req else 300
     from app.services.threat_feed_service import threat_feed_service
     res = threat_feed_service.sync_all_feeds(db=db, limit_per_feed=limit)
-    return res
+    return {"success": True, "result": res}
 
 
 @router.get("/threat-intel/stats")

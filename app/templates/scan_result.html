@@ -296,15 +296,27 @@
                         // Đồng bộ đồng hồ đo điểm số và banner phía trên nếu ban đầu điểm thấp
                         const staticNum = document.getElementById('animated-score-static');
                         const staticBar = document.getElementById('score-circle-bar-static');
+                        const dynamicNum = document.getElementById('animated-score-dynamic');
+                        const dynamicBar = document.getElementById('score-circle-bar-dynamic');
                         const currentStatic = parseInt(staticNum ? staticNum.innerText : '0', 10) || 0;
                         if (currentStatic < 60) {
+                            window.aiScoreOverridden = true;
                             const newScore = Math.round(data.confidence || 85);
+                            window.overriddenScoreVal = newScore;
+
+                            const r = 48;
+                            const circ = 2 * Math.PI * r;
+                            const offset = circ - (circ * newScore / 100);
+
                             if (staticNum) staticNum.innerText = newScore;
                             if (staticBar) {
-                                const r = 48;
-                                const circ = 2 * Math.PI * r;
-                                staticBar.style.strokeDashoffset = circ - (circ * newScore / 100);
+                                staticBar.style.strokeDashoffset = offset;
                                 staticBar.style.stroke = '#ef4444';
+                            }
+                            if (dynamicNum) dynamicNum.innerText = newScore;
+                            if (dynamicBar) {
+                                dynamicBar.style.strokeDashoffset = offset;
+                                dynamicBar.style.stroke = '#ef4444';
                             }
                             const staticCard = document.querySelector('.risk-card-item');
                             if (staticCard) {
@@ -314,6 +326,15 @@
                                 if (heading) heading.innerText = 'Cảnh báo nguy cơ lừa đảo (AI thẩm định)';
                                 const advice = staticCard.querySelector('.risk-card-desc p');
                                 if (advice && data.recommendation) advice.innerText = data.recommendation;
+                            }
+                            const dynamicCard = document.querySelectorAll('.risk-card-item')[1];
+                            if (dynamicCard) {
+                                dynamicCard.classList.remove('risk-low', 'risk-medium');
+                                dynamicCard.classList.add('risk-high');
+                                const dynHeading = dynamicCard.querySelector('.risk-status-heading');
+                                if (dynHeading) dynHeading.innerText = 'Phát hiện kịch bản lừa đảo (AI thẩm định)';
+                                const dynDesc = dynamicCard.querySelector('.risk-card-desc p');
+                                if (dynDesc) dynDesc.innerText = 'Mô hình AI phát hiện liên kết / kịch bản mang nguy cơ lừa đảo cao.';
                             }
                             const banner = document.getElementById('emergency-alert-banner');
                             if (banner) banner.style.display = 'flex';
@@ -678,6 +699,7 @@
 
                 const startStaticTime = performance.now();
                 function updateStatic(currentTime) {
+                    if (window.aiScoreOverridden) return;
                     const elapsed = currentTime - startStaticTime;
                     const progress = Math.min(elapsed / duration, 1);
                     const easeOut = 1 - Math.pow(1 - progress, 3);
@@ -685,7 +707,9 @@
                     if (progress < 1) {
                         requestAnimationFrame(updateStatic);
                     } else {
-                        staticNum.innerText = targetStatic;
+                        if (!window.aiScoreOverridden) {
+                            staticNum.innerText = targetStatic;
+                        }
                     }
                 }
                 requestAnimationFrame(updateStatic);
@@ -707,6 +731,7 @@
 
                 const startDynamicTime = performance.now();
                 function updateDynamic(currentTime) {
+                    if (window.aiScoreOverridden) return;
                     const elapsed = currentTime - startDynamicTime;
                     const progress = Math.min(elapsed / duration, 1);
                     const easeOut = 1 - Math.pow(1 - progress, 3);
@@ -714,7 +739,9 @@
                     if (progress < 1) {
                         requestAnimationFrame(updateDynamic);
                     } else {
-                        dynamicNum.innerText = targetDynamic;
+                        if (!window.aiScoreOverridden) {
+                            dynamicNum.innerText = targetDynamic;
+                        }
                     }
                 }
                 requestAnimationFrame(updateDynamic);
