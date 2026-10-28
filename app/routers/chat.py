@@ -47,16 +47,20 @@ CYBER_AUTHORITIES = [
 ]
 
 BASE_CHATBOT_INSTRUCTION = (
-    "Bạn là Trợ lý AI An ninh mạng P-Sieve của Học viện Công nghệ Bưu chính Viễn thông (PTIT).\n"
-    "Nhiệm vụ tối thượng: Tư vấn, vạch trần thủ đoạn lừa đảo và kích hoạt phản ứng ứng cứu khẩn cấp cho người dân tại Việt Nam "
-    "(mạo danh Công an/Viện kiểm sát, tuyển CTV giật đơn thương mại điện tử, sàn chứng khoán/forex ảo, bẫy trộm OTP ngân hàng, "
-    "cài file .apk mã độc chiếm quyền trợ năng Accessibility, bẫy tình cảm đầu tư Romance Scam).\n\n"
-    "NGUYÊN TẮC BẮT BUỘC KHI TRẢ LỜI:\n"
-    "1. Dứt khoát và rõ ràng: Khẳng định bản chất hành vi ngay từ câu đầu tiên (ví dụ: ĐÂY LÀ HÀNH VI LỪA ĐẢO 100%).\n"
-    "2. Ưu tiên Quy trình 15 Phút Vàng nếu người dùng đã chuyển tiền hoặc lộ OTP: Yêu cầu khóa thẻ ngay, ngắt mạng thiết bị, thu thập bằng chứng.\n"
-    "3. Giải thích vạch trần đòn tâm lý: Nêu rõ đối tượng đang thao túng nỗi sợ (án tù, vi phạm pháp luật) hay lòng tham (hoa hồng cao, tiền thưởng).\n"
-    "4. Cung cấp hotline chính thống: Đưa số hotline ngân hàng hoặc số đường dây nóng A05/C02 khi cần.\n"
-    "5. QUY ĐỊNH BẤT DI BẤT DỊCH: TUYỆT ĐỐI KHÔNG SỬ DỤNG BẤT KỲ ICON HOẶC EMOJI NÀO trong toàn bộ câu trả lời. Giữ văn phong an ninh mạng nghiêm túc, chuẩn mực."
+    "Bạn là Trợ lý AI Đa năng & Chuyên gia An ninh số P-Sieve.\n\n"
+    "VAI TRÒ VÀ NĂNG LỰC TOÀN DIỆN:\n"
+    "1. ĐA NĂNG & THÔNG MINH: Bạn có khả năng giao tiếp tự nhiên, thấu đáo và giải đáp hầu hết mọi câu hỏi "
+    "của người dùng trên mọi lĩnh vực: đời sống, khoa học, công nghệ, lập trình phần mềm, thuật toán, toán học, "
+    "học tập, văn hóa, chào hỏi xã giao, v.v.\n"
+    "2. CHUYÊN GIA AN NINH SỐ HÀNG ĐẦU: Khi người dùng hỏi về an toàn thông tin, bảo mật tài khoản, nhận diện đường link/tin nhắn/cuộc gọi khả nghi, "
+    "hoặc gặp sự cố lừa đảo trực tuyến: Hãy lập tức phát huy chuyên môn an ninh mạng sắc bén để phân tích bản chất, cảnh báo thủ đoạn "
+    "và hướng dẫn biện pháp phòng ngừa hoặc ứng cứu khẩn cấp.\n\n"
+    "NGUYÊN TẮC PHẢN HỒI:\n"
+    "- Với câu chào hỏi hoặc giao tiếp thường ngày: Trả lời thân thiện, lịch thiệp, tự nhiên và sẵn sàng hỗ trợ.\n"
+    "- Với câu hỏi kiến thức, công nghệ, lập trình, học thuật: Giải thích mạch lạc, chính xác, có ví dụ cụ thể nếu cần.\n"
+    "- Với tình huống lừa đảo hoặc nghi vấn độc hại: Nhận định dứt khoát, vạch trần thủ đoạn tâm lý hoặc dấu hiệu kỹ thuật giả mạo.\n"
+    "- Với tình huống nguy cấp (đã chuyển tiền, lộ OTP, cài app lạ): Kích hoạt ngay các bước ứng cứu khẩn cấp (khóa thẻ ngân hàng, ngắt mạng thiết bị, thu thập bằng chứng, trình báo cơ quan chức năng).\n"
+    "- QUY ĐỊNH BẮT BUỘC: TUYỆT ĐỐI KHÔNG SỬ DỤNG BẤT KỲ ICON HOẶC EMOJI NÀO trong toàn bộ câu trả lời. Trình bày chuẩn mực, rõ ràng bằng văn bản thuần túy và định dạng markdown (in đậm, danh sách gạch đầu dòng)."
 )
 
 
@@ -81,10 +85,11 @@ def strip_accents(text: str) -> str:
 
 def detect_triage_level(text: str) -> Dict[str, Any]:
     """
-    Ma tran Phan loai Nguy cap 3 Cap do (Incident Triage Matrix):
+    Ma tran Phan loai Nguy cap (Incident Triage Matrix):
     - LEVEL 3 (CRITICAL): Da chuyen tien, da lo OTP, da cai file .apk
     - LEVEL 2 (WARNING): Vua bam link, da gui thong tin ca nhan, dang bi de doa
-    - LEVEL 1 (INFO): Hoi thac mac, nhan dien tinh huong chung
+    - LEVEL 1 (INFO): Hoi thac mac, nhan dien tinh huong an ninh / lua dao
+    - GENERAL: Cau hoi tong quat, chao hoi, lap trinh, doi song, ngoai le
     """
     text_raw = (text or "").lower()
     text_no_accents = strip_accents(text)
@@ -125,12 +130,29 @@ def detect_triage_level(text: str) -> Dict[str, Any]:
                 "description": "Người dùng đã tương tác với nguồn nghi vấn nhưng chưa phát sinh giao dịch tài chính hoặc mất quyền kiểm soát."
             }
 
-    # Mac dinh Cap do 1 (INFO)
+    # 3. Kiem tra xem co phai cau hoi ve An ninh mang / Lua dao khong (INFO)
+    security_terms = [
+        r"(?:lua\s+dao|scam|phishing|gia\s+mao|mao\s+danh|chiem\s+doat|ma\s+doc|virus|trojan|hacker|blackmail|tong\s+tien)",
+        r"(?:an\s+ninh|bao\s+mat|an\s+toan|mat\s+khau|password|2fa|otp|xac\s+thuc|tai\s+khoan\s+ngan\s+hang|stk|so\s+tai\s+khoan)",
+        r"(?:kiem\s+tra|tra\s+cuu|giam\s+dinh|danh\s+sach\s+den|blacklist|canh\s+bao|bao\s+cao\s+lua\s+dao)",
+        r"(?:giat\s+don|ctv|cong\s+tac\s+vien|nhiem\s+vu|hoa\s+hong|san\s+ao|forex|chung\s+khoan\s+ao|tien\s+ao)",
+        r"(?:https?://|www\.)"
+    ]
+    for pattern in security_terms:
+        if re.search(pattern, text_no_accents) or re.search(pattern, text_raw):
+            return {
+                "level": "INFO",
+                "title": "TƯ VẤN & NHẬN DIỆN THỦ ĐOẠN LỪA ĐẢO",
+                "badge": "TƯ VẤN",
+                "description": "Tra cứu thông tin và hướng dẫn nhận diện các chiêu trò lừa đảo trực tuyến."
+            }
+
+    # 4. Mac dinh: Cau hoi tong quat / Doi song / Cong nghe / Chao hoi (GENERAL)
     return {
-        "level": "INFO",
-        "title": "TƯ VẤN & NHẬN DIỆN THỦ ĐOẠN LỪA ĐẢO",
-        "badge": "TƯ VẤN",
-        "description": "Tra cứu thông tin và hướng dẫn nhận diện các chiêu trò lừa đảo trực tuyến."
+        "level": "GENERAL",
+        "title": "TRỢ LÝ AI P-SIEVE",
+        "badge": "TRỢ LÝ",
+        "description": "Hỗ trợ đa năng, giải đáp thông tin và trò chuyện."
     }
 
 
@@ -205,14 +227,14 @@ def generate_quick_actions(triage_level: str, scan_telemetry: Optional[Dict[str,
         actions.append({"label": "Cách Đổi Mật Khẩu & Hủy Phiên Đăng Nhập", "action": "show_security_steps"})
         actions.append({"label": "Kiểm Tra Tài Khoản Nghi Vấn", "action": "check_account_prompt"})
         actions.append({"label": "Danh Bạ Hotline Ngân Hàng", "action": "show_bank_hotlines"})
-    else:
+    elif triage_level == "INFO":
         if scan_telemetry and scan_telemetry.get("is_scam"):
             actions.append({"label": "Báo Cáo Trang Web Lừa Đảo", "action": "report_website"})
             actions.append({"label": "Hotline Ngân Hàng 24/7", "action": "show_bank_hotlines"})
         else:
-            actions.append({"label": "Hotline Ngân Hàng 24/7", "action": "show_bank_hotlines"})
-            actions.append({"label": "Quy Trình Ứng Cứu 15 Phút Vàng", "action": "show_golden_15m"})
-            actions.append({"label": "Đường Dây Nóng An Ninh Mạng A05", "action": "show_cyber_police"})
+            actions.append({"label": "Kiểm Tra Tài Khoản Nghi Vấn", "action": "check_account_prompt"})
+            actions.append({"label": "Danh Bạ Hotline Ngân Hàng", "action": "show_bank_hotlines"})
+    # Doi voi tinh huong GENERAL (chao hoi, cau hoi ngoai le, tin hoc): Khong hien nut de giao dien gon gang, thanh lich
     return actions
 
 
@@ -254,7 +276,10 @@ def api_chat(req: ChatRequest):
     quick_actions = generate_quick_actions(triage["level"], scan_telemetry)
 
     # 2. Xay dung System Prompt da bien voi Du lieu Giam dinh Thuc nghiem
-    augmented_instruction = BASE_CHATBOT_INSTRUCTION + f"\n\n[CẤP ĐỘ NGUY CẤP HIỆN TẠI]: {triage['title']}"
+    if triage["level"] in ["CRITICAL", "WARNING", "INFO"]:
+        augmented_instruction = BASE_CHATBOT_INSTRUCTION + f"\n\n[CẤP ĐỘ NGUY CẤP HIỆN TẠI]: {triage['title']}"
+    else:
+        augmented_instruction = BASE_CHATBOT_INSTRUCTION
 
     if scan_telemetry:
         if scan_telemetry.get("has_url"):
@@ -396,7 +421,7 @@ def api_chat(req: ChatRequest):
             "2. Tuyệt đối không nhập thông tin tài khoản, mật khẩu, số căn cước hay mã OTP.\n"
             "3. Nếu đã trót nhập thông tin, hãy đổi mật khẩu dịch vụ chính thống ngay lập tức."
         )
-    else:
+    elif triage["level"] == "INFO":
         fallback_reply = (
             "HỆ THỐNG AN NINH P-SIEVE KHUYẾN CÁO:\n\n"
             "- Đối tượng tự xưng Công an/Viện kiểm sát dọa bắt và yêu cầu chuyển tiền: 100% LỪA ĐẢO. "
@@ -405,6 +430,26 @@ def api_chat(req: ChatRequest):
             "Dừng ngay, tuyệt đối không nạp tiền để cứu vốn bị treo.\n\n"
             "- Mọi cuộc gọi, tin nhắn yêu cầu cung cấp mã OTP ngân hàng hoặc truy cập link nhận quà đều là bẫy lừa đảo."
         )
+    else:
+        # Xu ly linh hoat cho cau hoi thong thuong / chao hoi / tong quat
+        user_lower = user_msg.lower().strip()
+        if any(w in user_lower for w in ["hello", "hi", "chào", "chao", "alo", "hey", "ơi"]):
+            fallback_reply = (
+                "Xin chào! Tôi là Trợ lý AI P-Sieve.\n\n"
+                "Tôi luôn sẵn sàng giải đáp các câu hỏi của bạn về mọi lĩnh vực, từ kiến thức thường thức, lập trình, "
+                "đến phân tích và tư vấn an toàn thông tin số. Bạn đang quan tâm hay cần tôi hỗ trợ vấn đề gì hôm nay?"
+            )
+        elif any(w in user_lower for w in ["bạn là ai", "ban la ai", "ai phát triển", "gioi thieu", "giới thiệu"]):
+            fallback_reply = (
+                "Tôi là Trợ lý AI P-Sieve, hệ thống trợ lý thông minh hỗ trợ giải đáp đa lĩnh vực "
+                "và chuyên gia tư vấn bảo mật, phòng ngừa rủi ro lừa đảo trực tuyến tại Việt Nam."
+            )
+        else:
+            fallback_reply = (
+                f"Chào bạn, tôi đã tiếp nhận câu hỏi của bạn về: '{user_msg}'.\n\n"
+                "Tôi có thể giải đáp các vấn đề về kiến thức, lập trình, công nghệ cũng như giám định đường link và an toàn số. "
+                "Bạn hãy đặt câu hỏi chi tiết hơn để tôi có thể hỗ trợ tốt nhất nhé."
+            )
 
     return {
         "success": True,

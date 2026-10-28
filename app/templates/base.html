@@ -77,9 +77,9 @@
                     <img src="/static/images/ptit_logo.png" alt="P-Sieve">
                 </div>
                 <div class="ms-msg-bubble ms-bubble-assistant">
-                    <div class="ms-msg-sender">Trợ lý AI P-Sieve (Học viện PTIT)</div>
+                    <div class="ms-msg-sender">Trợ lý AI P-Sieve</div>
                     <div class="ms-msg-text">
-                        Xin chào! Tôi là Trợ lý AI P-Sieve. Hãy gửi số tài khoản, link website nghi ngờ, hoặc mô tả tình huống bạn vừa gặp để tôi phân tích và hướng dẫn ứng cứu khẩn cấp ngay lập tức.
+                        Xin chào! Tôi là Trợ lý AI P-Sieve. Bạn có thể trò chuyện, đặt câu hỏi về mọi lĩnh vực hoặc gửi số tài khoản, link website, tình huống nghi ngờ để tôi phân tích và hỗ trợ ngay lập tức.
                     </div>
                 </div>
             </div>
@@ -100,7 +100,7 @@
                 <button type="submit" id="msSendBtn" class="ms-send-btn">Gửi</button>
             </div>
             <div class="ms-form-footer">
-                Bảo vệ an ninh số bởi PTIT - Tuyệt đối không cung cấp OTP cho bất kỳ ai.
+                Bảo vệ an ninh số bởi P-Sieve - Tuyệt đối không cung cấp OTP cho bất kỳ ai.
             </div>
         </form>
     </div>
@@ -131,7 +131,19 @@
             if (input) {
                 setTimeout(function() { input.focus(); }, 150);
             }
-            scrollMsToBottom();
+            var stream = document.getElementById('msMessagesStream');
+            if (stream) {
+                if (msConversationHistory.length === 0) {
+                    stream.scrollTop = 0;
+                } else {
+                    var lastUser = stream.querySelector('.ms-row-user:last-of-type');
+                    if (lastUser) {
+                        scrollToChatRow(lastUser);
+                    } else {
+                        stream.scrollTop = stream.scrollHeight;
+                    }
+                }
+            }
         }
 
         function closeMessengerChat() {
@@ -148,10 +160,10 @@
             stream.innerHTML = '<div class="ms-msg-row ms-row-assistant">' +
                 '<div class="ms-msg-avatar"><img src="/static/images/ptit_logo.png" alt="P-Sieve"></div>' +
                 '<div class="ms-msg-bubble ms-bubble-assistant">' +
-                '<div class="ms-msg-sender">Trợ lý AI P-Sieve (Học viện PTIT)</div>' +
-                '<div class="ms-msg-text">Lịch sử tư vấn đã được làm mới. Bạn cần hỗ trợ kiểm tra đường link, số tài khoản hoặc tình huống nghi vấn nào?</div>' +
+                '<div class="ms-msg-sender">Trợ lý AI P-Sieve</div>' +
+                '<div class="ms-msg-text">Lịch sử tư vấn đã được làm mới. Bạn có câu hỏi nào cần giải đáp hoặc cần kiểm tra đường link, số tài khoản nghi vấn nào không?</div>' +
                 '</div></div>';
-            scrollMsToBottom();
+            stream.scrollTop = 0;
         }
 
         function formatMsMarkdown(text) {
@@ -193,6 +205,20 @@
             return html || escaped;
         }
 
+        function scrollToChatRow(targetRow) {
+            var stream = document.getElementById('msMessagesStream');
+            if (!stream || !targetRow) return;
+
+            var streamRect = stream.getBoundingClientRect();
+            var rowRect = targetRow.getBoundingClientRect();
+            var relativeTop = rowRect.top - streamRect.top + stream.scrollTop;
+
+            stream.scrollTo({
+                top: Math.max(0, relativeTop - 12),
+                behavior: 'smooth'
+            });
+        }
+
         function scrollMsToBottom() {
             var stream = document.getElementById('msMessagesStream');
             if (stream) {
@@ -210,7 +236,7 @@
             if (role === 'assistant') {
                 var innerHtml = '<div class="ms-msg-avatar"><img src="/static/images/ptit_logo.png" alt="P-Sieve"></div>' +
                     '<div class="ms-msg-bubble ms-bubble-assistant">' +
-                    '<div class="ms-msg-sender">Trợ lý AI P-Sieve (Học viện PTIT)</div>';
+                    '<div class="ms-msg-sender">Trợ lý AI P-Sieve</div>';
 
                 // 1. Triage Banner
                 if (metadata && metadata.triage_level === 'CRITICAL') {
@@ -262,15 +288,32 @@
 
                 innerHtml += '</div>';
                 row.innerHTML = innerHtml;
+
+                // Ghi nho phan tu tin nhan cua nguoi dung ngay truoc do
+                var previousUserRow = stream.lastElementChild;
+                stream.appendChild(row);
+
+                // Cuon toi uu: Giu cau hoi cua nguoi dung o tren va phan dau cau tra loi tren tam mat (nhu Anh 3)
+                setTimeout(function() {
+                    if (previousUserRow && previousUserRow.classList.contains('ms-row-user')) {
+                        scrollToChatRow(previousUserRow);
+                    } else {
+                        scrollToChatRow(row);
+                    }
+                }, 40);
             } else {
                 var escapedText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 row.innerHTML = '<div class="ms-msg-bubble ms-bubble-user">' +
                     '<div class="ms-msg-text">' + escapedText + '</div>' +
                     '</div>';
+                stream.appendChild(row);
+                setTimeout(function() {
+                    stream.scrollTo({
+                        top: stream.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                }, 30);
             }
-
-            stream.appendChild(row);
-            scrollMsToBottom();
         }
 
         function executeMsAction(actionKey) {
@@ -350,7 +393,9 @@
                 bodyHtml +
                 '</div></div>';
             stream.appendChild(row);
-            scrollMsToBottom();
+            setTimeout(function() {
+                scrollToChatRow(row);
+            }, 40);
         }
 
         function handleMsKeyDown(e) {
