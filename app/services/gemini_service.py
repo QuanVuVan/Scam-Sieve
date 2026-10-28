@@ -22,8 +22,6 @@ GROQ_MODELS = [
 GEMINI_MODELS = [
     "gemini-3-flash-preview",
     "gemini-3.5-flash",
-    "gemini-3.6-flash",
-    "gemini-flash-latest",
 ]
 
 
@@ -47,11 +45,11 @@ class GeminiSecurityService:
         return bool((self.api_key and self.api_key.strip()) or (self.groq_api_key and self.groq_api_key.strip()))
 
     @staticmethod
-    def _preprocess_image(image_bytes: bytes, max_dim: int = 1000) -> tuple[bytes, str]:
+    def _preprocess_image(image_bytes: bytes, max_dim: int = 550) -> tuple[bytes, str]:
         """
         Nén và tối ưu hóa hình ảnh siêu tốc trước khi gửi qua API:
-        - Giữ độ phân giải sắc nét tiêu chuẩn (tối đa 1000px) cho OCR đọc chữ nhỏ và đường link rõ nét.
-        - Chuyển đổi sang JPEG chất lượng 82% giữ nguyên chi tiết ký tự, giảm 85% dung lượng để xử lý tức thì (< 3s).
+        - Giữ kích thước gọn (550px) để AI xử lý trong 1-2 giây.
+        - Nén JPEG 75% giảm dung lượng xuống còn ~25KB để truyền tải mạng cực nhanh.
         """
         try:
             from PIL import Image
@@ -75,7 +73,7 @@ class GeminiSecurityService:
                 img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
 
             out_buf = io.BytesIO()
-            img.save(out_buf, format="JPEG", quality=82, optimize=True)
+            img.save(out_buf, format="JPEG", quality=75, optimize=True)
             return out_buf.getvalue(), "image/jpeg"
         except Exception as e:
             logger.warning(f"Image preprocessing warning: {e}")
@@ -349,8 +347,8 @@ class GeminiSecurityService:
         if not image_bytes:
             return {"active": False, "error": "Dữ liệu ảnh trống"}
 
-        # 1. Tối ưu nén ảnh siêu nhẹ trước khi tải lên (giảm 85% dung lượng, phản hồi cực nhanh 1-2s)
-        compressed_bytes, mime_type = self._preprocess_image(image_bytes, max_dim=1000)
+        # 1. Tối ưu nén ảnh siêu nhẹ trước khi tải lên (giảm dung lượng xuống ~25KB, tải tức thì)
+        compressed_bytes, mime_type = self._preprocess_image(image_bytes, max_dim=550)
 
         import base64
         import hashlib
@@ -370,52 +368,25 @@ class GeminiSecurityService:
         b64_data = base64.b64encode(compressed_bytes).decode("utf-8")
 
         system_instruction = (
-            "Bạn là Chuyên gia Giám định Kỹ thuật số và An ninh mạng chuyên phân tích "
-            "các hình ảnh, ảnh chụp màn hình liên quan đến lừa đảo tại Việt Nam.\n\n"
-            "CÁC LOẠI HÌNH ẢNH CẦN GIÁM ĐỊNH:\n"
-            "1. BIÊN LAI CHUYỂN TIỀN NGÂN HÀNG GIẢ (Fake Banking Bill): Soi các dấu hiệu chỉnh sửa Photoshop, "
-            "sai phông chữ số tiền, lệch vị trí thời gian, số dư bất thường, mạo danh app Vietcombank/MBBank/Techcombank/BIDV...\n"
-            "2. GIẤY TRIỆU TẬP / LỆNH BẮT GIỮ / QUYẾT ĐỊNH KHỞI TỐ GIẢ MẠO: Có con dấu đỏ giả của Công an, "
-            "Viện kiểm sát, Tòa án nhằm đe dọa tống tiền người dân.\n"
-            "3. ẢNH CHỤP MÀN HÌNH TIN NHẮN / ĐOẠN CHAT LỪA ĐẢO: Chat Zalo/Telegram tuyển dụng làm nhiệm vụ online, "
-            "nạp tiền nhận hoa hồng, đầu tư tiền ảo/Forex, hoặc thông báo trúng thưởng đóng phí.\n"
-            "4. THÔNG BÁO / VĂN BẢN MẠO DANH DOANH NGHIỆP: Nâng cấp SIM, thông báo trúng quà tặng, đòi nợ cước viễn thông chứa link lạ, tải file APK độc hại.\n"
-            "5. TIN NHẮN MƯỢN TIỀN / NHỜ CHUYỂN KHOẢN GẤP (Impersonation Money Request): Hack nick người quen, bạn bè, tạo tình huống khẩn cấp (tài khoản lỗi, đang mua đồ tại quán cần chuyển gấp, nhờ nạp tiền...) kèm ảnh máy quẹt thẻ POS hoặc số tài khoản ngân hàng lạ.\n\n"
-            "QUY TẮC ĐẶC BIỆT QUAN TRỌNG ĐỂ TRÁNH BÁO NHẦM (FALSE POSITIVE):\n"
-            "- Rất nhiều tin nhắn là TIN NHẮN QUẢNG CÁO, KHUYẾN MÃI, CHĂM SÓC KHÁCH HÀNG CHÍNH THỐNG của các nhà mạng (Viettel, Vinaphone, Mobifone) hoặc Ngân hàng/Doanh nghiệp lớn.\n"
-            "- DANH SÁCH TÊN MIỀN VÀ ĐẦU SỐ CHÍNH THỨC CẦN LƯU Ý:\n"
-            "  + Viettel: viettel.vn, myviettel.vn, viettelmoney.vn, vt.vn, viettel.go.link; Tổng đài: 198, 197, 191, 195, 100.\n"
-            "  + Vinaphone / VNPT: vinaphone.com.vn, vnpt.com.vn; Tổng đài: 18001091, 9191.\n"
-            "  + Mobifone: mobifone.vn; Tổng đài: 18001090, 9090.\n"
-            "  + Cơ quan nhà nước: *.gov.vn, *.chinhphu.vn, vneid.gov.vn, dichvucong.gov.vn.\n"
-            "  + Ngân hàng: vietcombank.com.vn, techcombank.com, bidv.com.vn, mbbank.com.vn, vpbank.com.vn...\n"
-            "- ĐIỀU KIỆN XÁC ĐỊNH LÀ TIN NHẮN CHÍNH THỐNG / AN TOÀN (is_scam = false, risk_level = 'LOW'):\n"
-            "  + Đường dẫn liên kết thuộc tên miền gốc chính thức ở trên (ví dụ: https://viettel.vn/... hoặc sub-link chính thức).\n"
-            "  + Tin nhắn khuyến mãi nạp thẻ, tặng data, đổi điểm Viettel++, giới thiệu tính năng/chương trình mới kèm số tổng đài CSKH (198, 191...).\n"
-            "  + KHÔNG yêu cầu chuyển tiền đến tài khoản cá nhân, KHÔNG yêu cầu đọc/nhập mã OTP hay mật khẩu, KHÔNG đe dọa khóa số hay phạt tiền.\n"
-            "  -> KHI ĐÓ: Tuyệt đối KHÔNG được kết luận là lừa đảo. Hãy kết luận 'is_scam': false, 'risk_level': 'LOW', 'category': 'Tin nhắn quảng cáo / Chăm sóc khách hàng chính thống'.\n\n"
-            "NHIỆM VỤ CỦA BẠN:\n"
-            "- TRÍCH XUẤT CHÍNH XÁC TUYỆT ĐỐI 100% NGUYÊN VĂN toàn bộ nội dung xuất hiện trong ảnh: Đọc chuẩn xác từng chữ, giữ đúng dấu tiếng Việt và tiếng lóng mạng (ví dụ: 'ck' = chuyển khoản, 'cứu em với', '450 à', 'xiu em ck lại liền á'). Tuyệt đối KHÔNG viết sai chính tả, KHÔNG đoán mò, KHÔNG làm méo mó các từ ngữ trong ảnh.\n"
-            "- NẾU LÀ TIN NHẮN NHỜ CHUYỂN TIỀN / MƯỢN TIỀN VỚI LÝ DO TÀI KHOẢN LỖI: Đây là hành vi lừa đảo chiếm quyền điều khiển tài khoản (hack nick) điển hình. Kết luận ngay: 'is_scam': true, 'risk_level': 'HIGH', 'category': 'Lừa đảo mượn tiền / Nhờ chuyển khoản gấp'.\n"
-            "- Chỉ ra các bằng chứng thị giác cụ thể (Visual Evidence).\n"
-            "- Đưa ra kết luận khách quan, chính xác.\n\n"
-            "QUAN TRỌNG: Bạn chỉ được trả về DUY NHẤT một chuỗi JSON chuẩn (không bọc trong markdown ```json, không có lời dẫn nào khác) với cấu trúc sau:\n"
+            "Bạn là AI an ninh P-Sieve giám định ảnh chụp tin nhắn/văn bản tại Việt Nam.\n"
+            "QUY TẮC NHANH:\n"
+            "1. TRÍCH XUẤT NGUYÊN VĂN: Đọc toàn bộ chữ, số điện thoại, URL trong ảnh (giữ đúng dấu tiếng Việt và tiếng lóng: ck, cứu em với, 450 à).\n"
+            "2. PHÂN LOẠI:\n"
+            "   - LỪA ĐẢO (is_scam: true, risk_level: 'HIGH'): Hack nick nhờ chuyển khoản/mượn tiền (tài khoản lỗi, nhờ ck hộ, ảnh máy POS), đe dọa khóa SIM, đòi OTP/tiền, giấy tờ công an giả mạo, web cờ bạc/app lừa đảo.\n"
+            "   - CHÍNH THỐNG (is_scam: false, risk_level: 'LOW'): Tin nhắn chăm sóc/ưu đãi từ nhà mạng (Viettel, Vina, Mobi) có tên miền chính thống (viettel.vn) hoặc hotline (198), KHÔNG dọa nạt, KHÔNG xin OTP/tiền.\n\n"
+            "Trả về DUY NHẤT chuỗi JSON (không bọc markdown, không lời dẫn):\n"
             "{\n"
             '  "is_scam": false,\n'
             '  "confidence": 95.0,\n'
             '  "risk_level": "LOW",\n'
-            '  "category": "Tin nhắn quảng cáo / Chăm sóc khách hàng chính thống",\n'
-            '  "extracted_text": "Toàn bộ văn bản đầy đủ đọc được trong ảnh...",\n'
-            '  "extracted_phone": "Số điện thoại xuất hiện trong ảnh nếu có",\n'
-            '  "extracted_url": "Đường link xuất hiện trong ảnh nếu có",\n'
-            '  "visual_evidence": [\n'
-            '    "Tên miền chính thức viettel.vn và đầu số tổng đài chính thống 198",\n'
-            '    "Nội dung là chương trình đổi điểm Viettel++ không có hành vi đòi mã OTP hay đe dọa"\n'
-            '  ],\n'
-            '  "analysis": "Trình bày theo các gạch đầu dòng rõ ràng, mỗi ý xuống dòng bắt đầu bằng dấu gạch ngang (-). Nêu rõ bản chất tin nhắn là quảng cáo chính thống hay giả mạo.",\n'
-            '  "recommendation": "Khuyến nghị an toàn cụ thể cho người dùng."\n'
-            "}\n"
-            "Lưu ý: risk_level chỉ nhận một trong 3 giá trị: 'HIGH', 'MEDIUM', 'LOW'."
+            '  "category": "Thông báo chính thống Viettel",\n'
+            '  "extracted_text": "Toàn bộ văn bản trong ảnh...",\n'
+            '  "extracted_phone": "198",\n'
+            '  "extracted_url": "viettel.vn",\n'
+            '  "visual_evidence": ["Tên miền chính thống viettel.vn"],\n'
+            '  "analysis": "Tin nhắn chính thống từ nhà mạng.",\n'
+            '  "recommendation": "Nội dung an toàn."\n'
+            "}"
         )
 
         payload = {
@@ -435,8 +406,11 @@ class GeminiSecurityService:
             "generationConfig": {
                 "temperature": 0.1,
                 "topP": 0.95,
-                "maxOutputTokens": 800,
+                "maxOutputTokens": 700,
                 "responseMimeType": "application/json",
+                "thinkingConfig": {
+                    "thinkingBudget": 0
+                }
             }
         }
 
@@ -448,7 +422,7 @@ class GeminiSecurityService:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
                 headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
                 try:
-                    with httpx.Client(timeout=6.0) as client:
+                    with httpx.Client(timeout=12.0) as client:
                         response = client.post(url, json=payload, headers=headers)
 
                     if response.status_code == 200:
@@ -766,6 +740,26 @@ class GeminiSecurityService:
                 return json.loads(cleaned[first_brace:last_brace + 1])
             except Exception:
                 pass
+
+        # 4. Trích xuất cứu hộ khi JSON bị cắt cụt
+        if "extracted_text" in cleaned or "is_scam" in cleaned:
+            extracted_dict = {}
+            for field in ["is_scam", "confidence", "risk_level", "category", "extracted_text", "extracted_phone", "extracted_url", "analysis"]:
+                m_field = re.search(rf'"{field}"\s*:\s*([^,\n\}}]+)', cleaned)
+                if m_field:
+                    val = m_field.group(1).strip().strip('"\'')
+                    if field == "is_scam":
+                        extracted_dict[field] = val.lower() == "true"
+                    elif field == "confidence":
+                        try:
+                            extracted_dict[field] = float(val)
+                        except Exception:
+                            extracted_dict[field] = 85.0
+                    else:
+                        extracted_dict[field] = val
+            if "extracted_text" in extracted_dict or "is_scam" in extracted_dict:
+                return extracted_dict
+
         return None
 
 
